@@ -1,0 +1,172 @@
+.TH PV 1 "July 2026" "pv 0.5" "User Commands"
+.SH NAME
+pv \- Pressure Valve: intelligent process lifecycle management
+.SH SYNOPSIS
+.B pv
+.RI [ COMMAND ]
+.RI [ OPTIONS ]
+.SH DESCRIPTION
+.nf
+.eo
+         .  .  .
+        .  .  .  .
+          _______
+         /_______\
+        |\ \   / /|
+        | \ \ / / |
+        |  \ V /  |
+        |  /   \  |
+        | /     \ |
+        |/_______\|
+          |  |  |
+       ___|  |  |___
+      /             \
+   __|               |__
+  |___|             |___|
+.ec
+.fi
+.PP
+\fBpv\fR treats a process not as a PID that is either running or dead, but
+as an \fIintent\fR with lifecycle semantics. It infers what each process is
+trying to accomplish, predicts resource exhaustion before it happens, and
+can suspend, resume, detach, and migrate work accordingly. The process is
+no longer sacred; the objective is.
+.PP
+All state is read from \fI/proc\fR, \fI/sys\fR, and kernel PSI
+(\fI/proc/pressure/*\fR). No daemon is required for the one-shot commands;
+\fBpv daemon\fR adds continuous observation, habit learning, and
+notifications.
+.SH COMMANDS
+.TP
+.B pv
+Dashboard: pressure bars (CPU/RAM/IO/battery/thermals), the contextual
+process view, and concrete recommendations.
+.TP
+.B pv ps
+Contextual process list: each app with its inferred intent and lifecycle
+capabilities (suspend, interrupt, migrate).
+.TP
+.B pv pressure
+Detailed pressure breakdown, including memory burn rate and projected OOM
+ETA when memory is genuinely draining.
+.TP
+.B pv explain
+Plain-language explanation of the current system state.
+.TP
+.BI "pv intent " cmd...
+Classify a command without running it: interruptibility, suspend safety,
+migratability, GPU needs.
+.TP
+.BI "pv run -- " cmd...
+Run a command as a detached session (setsid, logged). Survives terminal and
+SSH disconnects.
+.TP
+.B pv sessions
+List pv sessions with last log line.
+.TP
+.BI "pv attach " id
+Follow a session's output; exits when the session ends.
+.TP
+.BI "pv suspend " target
+Gracefully freeze an app (by name or pid): sync, SIGSTOP, record state.
+Protected intents (ssh, runtimes, databases, package operations) are
+refused unless \fB--force\fR.
+.TP
+.BI "pv resume " target
+Thaw a suspended app.
+.TP
+.BI "pv kill " target
+Terminate a suspended app (thaw, then SIGTERM).
+.TP
+.B pv suspended
+List suspended apps with held memory and freeze age.
+.TP
+.BR "pv policy " [ --apply ] [ --init ]
+Evaluate pressure policies from \fI~/.config/pv/policies.toml\fR. Dry-run by
+default; \fB--apply\fR acts (suspend / renice+ionice / notify).
+.TP
+.BR "pv hosts " [ --init ]
+List configured remote hosts with online probes.
+.TP
+.BI "pv migrate " target " [" --to " host" ]
+Move restartable work (builds, encodes) to a remote host: rsync the working
+directory, resume the command over ssh, stream output back. Refuses
+non-migratable intents.
+.TP
+.BR "pv daemon " [ --interval " N" ] [ --desktop ] [ --install ]
+Continuous observation: learns a per-hour demand profile, tracks variance,
+and vents rustic valve-card notifications (8 valves: memory, demand spike,
+reclaimable reserve, swap thrash, erratic demand, habit forecast, battery,
+thermals). \fB--install\fR writes a systemd --user unit.
+.TP
+.BR "pv notify " [ --desktop ]
+Emit valve cards for the current state, then exit.
+.TP
+.B pv habits
+Show the learned per-hour demand profile.
+.TP
+.BR "pv live " [ --interval " N" ] [ --model " M" ] [ --no-infer ]
+Persistent dynamic view: realtime metrics, RSS trend arrows, and a
+streaming Groq inference panel. Inference re-fires on meaningful state
+change or a 120 s heartbeat. Default model: llama-3.1-8b-instant.
+.TP
+.BR "pv update " [ --source ] [ --system ] [ --force ] [ --check ]
+Self-update: latest GitHub release binary (fallback: clone + build from
+source). Installs to \fI~/.local/bin\fR, or \fI/usr/local/bin\fR with
+\fB--system\fR (via sudo). \fB--check\fR compares versions only.
+.SH FILES
+.TP
+.I ~/.config/pv/policies.toml
+Pressure policy rules (\fBpv policy --init\fR for defaults).
+.TP
+.I ~/.config/pv/hosts.toml
+Remote hosts for migration (\fBpv hosts --init\fR for a template).
+.TP
+.I ~/.config/pv/groq_api_key
+Groq API key (alternative to the environment variable).
+.TP
+.I ~/.local/share/pv/
+State: sessions/, suspended.toml, habits.toml.
+.SH ENVIRONMENT
+.TP
+.B GROQ_API_KEY
+Groq API key for \fBpv live\fR inference. Without it the panel degrades to
+an offline notice and metrics stay live.
+.TP
+.B NO_COLOR
+Disable colored output.
+.TP
+.B PV_COLOR
+Set to \fIalways\fR to force color when piping (e.g. to \fBless -R\fR).
+.TP
+.B XDG_CONFIG_HOME / XDG_DATA_HOME
+Override config/state locations (empty means unset, per spec).
+.SH EXIT STATUS
+0 on success; 1 on operational errors (unknown target, refused action,
+failed migration); 2 on usage errors.
+.SH EXAMPLES
+.TP
+.B pv suspend firefox
+Freeze an idle browser, reclaiming its memory until resumed.
+.TP
+.B pv run -- cargo build --release
+Detached, disconnect-proof build; follow with \fBpv attach\fR.
+.TP
+.B pv migrate cargo --to desktop
+Rsync the workspace and resume the build on the remote host.
+.TP
+.B pv live --model llama-3.3-70b-versatile
+Dynamic view with the sharper Groq model.
+.SH SEE ALSO
+.BR ps (1),
+.BR top (1),
+.BR kill (1),
+.BR renice (1),
+.BR systemctl (1),
+.BR criu (8)
+.PP
+Ecosystem: kaptaind(1), amber(1), fract(1), locksmith(1), bound(1), marty(1).
+.SH AUTHOR
+Vico Labs — https://github.com/elci-group/pv
+.SH LICENSE
+MIT
