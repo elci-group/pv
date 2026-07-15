@@ -1,10 +1,27 @@
-# pv — Pressure Valve
+<p align="center">
+  <img src="docs/logo.svg" alt="Pressure Valve logo" width="300">
+</p>
 
-**Intelligent process lifecycle management.** pv treats a process not as a PID
-that is either running or dead, but as an *intent* with lifecycle semantics:
-it understands what each process is trying to accomplish, predicts resource
-exhaustion before it happens, and can suspend, resume, detach, and migrate
-work accordingly.
+<h1 align="center">pv — Pressure Valve</h1>
+
+<p align="center">
+  <strong>Intelligent process lifecycle management.</strong><br>
+  The process is no longer sacred. The objective is.
+</p>
+
+<p align="center">
+  <a href="https://github.com/elci-group/pv/releases"><img alt="release" src="https://img.shields.io/github/v/release/elci-group/pv?style=flat-square&color=c96f2e"></a>
+  <a href="LICENSE"><img alt="license: MIT" src="https://img.shields.io/badge/license-MIT-39d6d6?style=flat-square"></a>
+  <img alt="dependencies: 3" src="https://img.shields.io/badge/deps-3-f0a830?style=flat-square">
+  <img alt="platform: linux" src="https://img.shields.io/badge/platform-linux-8a8f98?style=flat-square">
+</p>
+
+---
+
+pv treats a process not as a PID that is either running or dead, but as an
+*intent* with lifecycle semantics: it understands what each process is trying
+to accomplish, predicts resource exhaustion before it happens, and can
+suspend, resume, detach, and migrate work accordingly.
 
 ```
 Traditional                     Pressure Valve
