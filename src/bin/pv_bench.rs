@@ -357,15 +357,17 @@ cba = 0.45*acc + 0.25*stability + 0.15*freshness + 0.15*cost (ref $0.50/day)",
     // ---- per-workload detail ------------------------------------------------
     h1(&mut s, "Workload results", md);
     for w in WORKLOADS {
-        h2(&mut s, &format!("{} — {} agent(s), faux ps snapshot", w.name, w.agents), md);
+        let agents = if w.agents == 1 { "1 agent" } else { &*format!("{} agents", w.agents) };
+        let cores = if w.cores == 1 { "1 core".to_string() } else { format!("{} cores", w.cores) };
+        h2(&mut s, &format!("{} — {agents}, faux ps snapshot", w.name), md);
         let procs = w.procs.join("\n");
         code(&mut s, &procs, md);
         if md {
-            let _ = writeln!(s, "{} cores · ctx {}/{} tok · {:.0} events/h · needs tier {:.1}+, freshness ≤ {:.0}s · {:.0} h/day\n",
-                w.cores, w.ctx_in, w.ctx_out, w.events_hr, w.req_tier, w.freshness_need_s, w.active_hr_day);
+            let _ = writeln!(s, "{cores} · ctx {}/{} tok · {:.0} events/h · needs tier {:.1}+, freshness ≤ {:.0}s · {:.0} h/day\n",
+                w.ctx_in, w.ctx_out, w.events_hr, w.req_tier, w.freshness_need_s, w.active_hr_day);
         } else {
-            let _ = writeln!(s, "{} cores, ctx {}/{} tok, {:.0} events/h, needs tier {:.1}+, freshness <= {:.0}s, {:.0} h/day\n",
-                w.cores, w.ctx_in, w.ctx_out, w.events_hr, w.req_tier, w.freshness_need_s, w.active_hr_day);
+            let _ = writeln!(s, "{cores}, ctx {}/{} tok, {:.0} events/h, needs tier {:.1}+, freshness <= {:.0}s, {:.0} h/day\n",
+                w.ctx_in, w.ctx_out, w.events_hr, w.req_tier, w.freshness_need_s, w.active_hr_day);
         }
         for arch in [Arch::CachedNonStream, Arch::Streaming] {
             let ranked = rank(w, arch);
