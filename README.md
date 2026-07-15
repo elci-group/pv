@@ -44,6 +44,23 @@ cargo build --release
 No services, no daemon, no root. Everything is read from `/proc`, `/sys`, and
 kernel PSI (`/proc/pressure/*`) at invocation time.
 
+## Requirements
+
+pv keeps its crate dependencies at three (clap/serde/toml) by shelling out
+to standard Unix tools instead of linking libraries:
+
+- **Core:** `curl` (Groq inference, `pv update`), `sha256sum` (update
+  checksum verification). Without these, inference and updates fail.
+- **Optional:** `ssh` + `rsync` (`pv migrate`, `pv run --remote`),
+  `git` + `cargo` (`pv update --source`), `notify-send` (desktop valve
+  notifications), `getconf` (precise CPU tick rate), `renice` + `ionice`
+  (policy throttle actions), `stty` (`pv live` terminal mode). A missing
+  optional tool darkens only the matching feature.
+
+Run `pv doctor` to preflight your environment — it probes each tool and
+the optional config files, and reports exactly which features degrade when
+something is absent.
+
 ## Documentation
 
 - `pv --help` — command overview with the valve mark
@@ -283,9 +300,11 @@ note = "16 cores, 64 GB, RTX 5090"
 ```
 
 `pv migrate <app-or-session> --to desktop` moves *restartable* intents
-(builds, encodes): it rsyncs the working directory across and resumes the
-command remotely, streaming output back. Intent-aware — it refuses to
-"migrate" a database or your editor.
+(builds, encodes): it rsyncs the working directory across and re-runs the
+command there over ssh, streaming output back. No process state crosses —
+this is re-execution, not checkpointing, and the local process keeps
+running until you kill it. Intent-aware — it refuses to "migrate" a
+database or your editor.
 
 ## How it decides
 
