@@ -158,7 +158,7 @@ fn install(binary: &Path, system: bool) -> Result<PathBuf, String> {
 
 fn download(url: &str, dest: &Path) -> Result<(), String> {
     let st = Command::new("curl")
-        .args(["-fSL", "-H", "User-Agent: pv-updater", "-o"])
+        .args(["-fsSL", "-H", "User-Agent: pv-updater", "-o"])
         .arg(dest)
         .arg(url)
         .status()
