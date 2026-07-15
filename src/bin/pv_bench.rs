@@ -293,12 +293,12 @@ fn rank<'a>(w: &Workload, arch: Arch) -> Vec<Ranked<'a>> {
 }
 
 /// Cheapest ($/day) model that passes the accuracy threshold for (w, arch).
+/// Selection reuses `cheapest_passing` — per-call cost ordering is identical
+/// to per-day ordering within a fixed (workload, arch).
 fn cheapest_pass<'a>(w: &Workload, arch: Arch) -> Option<Ranked<'a>> {
-    MODELS
-        .iter()
-        .map(|m| Ranked { model: m, out: simulate(m, w, arch) })
-        .filter(|r| r.out.pass)
-        .min_by(|a, b| a.out.cost_day.partial_cmp(&b.out.cost_day).unwrap())
+    let model = cheapest_passing(w.req_tier, w.ctx_in as f64, w.ctx_out as f64)?;
+    let out = simulate(model, w, arch);
+    out.pass.then_some(Ranked { model, out })
 }
 
 fn money(x: f64) -> String {
