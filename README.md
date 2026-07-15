@@ -130,6 +130,8 @@ what matters, what happens next, and the one action to take.
 ╚═[ q quit ]══════════════════════════════════════════════════╝
 ```
 
+![pv live — realtime gauges and process trends](docs/live.gif)
+
 ```sh
 pv live                      # 1s redraw, streaming inference
 pv live --no-infer           # metrics only
