@@ -57,6 +57,16 @@ required = true
 forbid_regex = ["TODO", "FIXME", "unimplemented!"]
 
 [[file]]
+path = "src/groq.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "src/live.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
 path = "README.md"
 required = true
 

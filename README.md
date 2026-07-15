@@ -105,6 +105,42 @@ action = "suspend"
 message = "Suspend {app} (+{rss_mb} MB)"
 ```
 
+### `pv live` — dynamic mode
+
+A persistent, realtime view: gauges, the app table with RSS trend arrows
+(▲/▼), frozen apps, and a **streaming Groq inference panel** that narrates
+what matters, what happens next, and the one action to take.
+
+```
+╔═[ PV::LIVE ]═[ 15:55:05 ]═[ 1s ]════════════════════════════╗
+║ CPU ██░░░░░░ 36%  RAM ███░░░░░ 48%  IO █░░░░░░░ 21%         ║
+║ LOAD 11.23/12  MEM -78.1MB/s  OOM~31s  THERM 77°C  BAT 56%▼ ║
+╟─[ processes ]───────────────────────────────────────────────╢
+║ Chrome           browser    idle      2.7 GB ▼              ║
+║ Rust-lld         unknown    13%       2.5 GB ▲              ║
+║ Rustc            build      120%      1.3 GB ▼              ║
+╟─[ groq :: llama-3.1-8b-instant ]────────────────────────────╢
+║ RAM usage is high at 63%. Chrome is consuming 47% of CPU,   ║
+║ likely causing high load. Shut down Chrome to free resources║
+║ infer: 15:55:00 · 32 tok                                    ║
+╚═[ q quit ]══════════════════════════════════════════════════╝
+```
+
+```sh
+pv live                      # 1s redraw, streaming inference
+pv live --no-infer           # metrics only
+pv live --model llama-3.3-70b-versatile   # sharper, slower/costlier
+```
+
+Inference is served by Groq's OpenAI-compatible streaming API, reached over
+`curl` (no HTTP/TLS dependencies). Key resolution: `$GROQ_API_KEY`, then
+`~/.config/pv/groq_api_key`. Without a key the panel degrades to an offline
+notice and the metrics stay live. Inference re-fires only when the
+*meaningful* state changes (pressure bands, top apps, OOM ETA, battery) or
+on a 120 s heartbeat — never on a fixed hot loop. The default model,
+`llama-3.1-8b-instant`, is fast and cheap but editorializes; the 70B model
+follows the snapshot much more faithfully.
+
 ### `pv daemon` / `pv notify` — the valve board
 
 `pv notify` emits one-shot valve cards for the current state; `pv daemon`
