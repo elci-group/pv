@@ -357,7 +357,7 @@ cba = 0.45*acc + 0.25*stability + 0.15*freshness + 0.15*cost (ref $0.50/day)",
     // ---- per-workload detail ------------------------------------------------
     h1(&mut s, "Workload results", md);
     for w in WORKLOADS {
-        let agents = if w.agents == 1 { "1 agent" } else { &*format!("{} agents", w.agents) };
+        let agents = if w.agents == 1 { "1 agent".to_string() } else { format!("{} agents", w.agents) };
         let cores = if w.cores == 1 { "1 core".to_string() } else { format!("{} cores", w.cores) };
         h2(&mut s, &format!("{} — {agents}, faux ps snapshot", w.name), md);
         let procs = w.procs.join("\n");

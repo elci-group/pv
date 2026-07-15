@@ -39,13 +39,13 @@ cba = 0.45*acc + 0.25*stability + 0.15*freshness + 0.15*cost (ref $0.50/day)
 ## Workload results
 
 
-### single-core — 1 agent(s), faux ps snapshot
+### single-core — 1 agent, faux ps snapshot
 
 ```
 python agent.py --loop research      38%cpu   385MB
 sqlite3 .agent/state.db               2%cpu   128MB
 ```
-1 cores · ctx 1800/220 tok · 18 events/h · needs tier 1.0+, freshness ≤ 120s · 6 h/day
+1 core · ctx 1800/220 tok · 18 events/h · needs tier 1.0+, freshness ≤ 120s · 6 h/day
 
 [cached-nonstream] calls/h: 30
 | # | model | acc | stable | stale | $/day | cba | pass |
@@ -64,7 +64,7 @@ sqlite3 .agent/state.db               2%cpu   128MB
 | 4 | `qwen/qwen3-32b` | 63 | 0.67 | 4s | $1.97 | 0.631 | yes |
 
 
-### dual-core — 2 agent(s), faux ps snapshot
+### dual-core — 2 agents, faux ps snapshot
 
 ```
 python agent.py --role researcher    41%cpu   512MB
@@ -91,7 +91,7 @@ redis-server :6379                    1%cpu    60MB
 | 4 | `qwen/qwen3.6-27b` | 66 | 0.68 | 4s | $9.17 | 0.625 | yes |
 
 
-### quad-core — 4 agent(s), faux ps snapshot
+### quad-core — 4 agents, faux ps snapshot
 
 ```
 python orchestrator.py               22%cpu   640MB
@@ -119,7 +119,7 @@ python indexer.py --embed           30%cpu   890MB
 | 4 | `openai/gpt-oss-20b` | 60 | 0.68 | 4s | $1.95 | 0.621 | yes |
 
 
-### octo-core — 8 agent(s), faux ps snapshot
+### octo-core — 8 agents, faux ps snapshot
 
 ```
 python orchestrator.py               28%cpu   900MB
@@ -148,7 +148,7 @@ chromium --headless --render        45%cpu   1.6GB
 | 4 | `openai/gpt-oss-20b` | 55 | 0.68 | 4s | $3.44 | 0.588 | NO |
 
 
-### 12-core — 12 agent(s), faux ps snapshot
+### 12-core — 12 agents, faux ps snapshot
 
 ```
 python orchestrator.py               31%cpu   1.2GB
