@@ -347,7 +347,7 @@ fn history_notices(ctx: &Ctx) -> Vec<Notice> {
     let slope = ctx.hist.mem_slope_kb_s(ctx.interval);
 
     // V-01 escalation: sustained climb before we hit the critical line
-    if used >= 72.0 && used < 85.0 && slope > 2048.0 && ctx.hist.len() >= 12 {
+    if (72.0..85.0).contains(&used) && slope > 2048.0 && ctx.hist.len() >= 12 {
         out.push(Notice {
             level: Level::Warning,
             valve: "V-01",

@@ -525,8 +525,8 @@ cba = 0.45*acc + 0.25*stability + 0.15*freshness + 0.15*cost (ref $0.50/day)",
             } else {
                 let _ = writeln!(
                     s,
-                    "  {:<40} {:>4} {:>6} {:>6} {:>8} {:>6}  {}",
-                    "model", "acc", "stable", "stale", "$/day", "cba", "pass"
+                    "  {:<40} {:>4} {:>6} {:>6} {:>8} {:>6}  pass",
+                    "model", "acc", "stable", "stale", "$/day", "cba"
                 );
                 for r in ranked.iter().take(4) {
                     let _ = writeln!(

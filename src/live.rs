@@ -195,7 +195,7 @@ fn infer_prompt(apps: &[App], intents: &[(String, Intent)], r: &PressureReport) 
     }
     let running = crate::session::list()
         .into_iter()
-        .filter(|s| crate::session::is_alive(s))
+        .filter(crate::session::is_alive)
         .count();
     if running > 0 {
         s.push_str(&format!(" | PV-SESSIONS: {running} running"));
