@@ -35,6 +35,8 @@ kernel PSI (`/proc/pressure/*`) at invocation time.
 Pressure bars (CPU / RAM / IO / battery / thermals), the contextual process
 view, and concrete recommendations.
 
+![pv dashboard, intent recognition, and explain](docs/dashboard.gif)
+
 ```
 Pressure
   CPU       ░░░░░░░░  load 0.93 on 12 cores, psi 0%
