@@ -81,6 +81,14 @@ path = "bench/REPORT.md"
 required = true
 
 [[file]]
+path = "bench/temp_probe.py"
+required = true
+
+[[file]]
+path = "bench/temperature.json"
+required = true
+
+[[file]]
 path = "README.md"
 required = true
 
