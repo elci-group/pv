@@ -157,8 +157,7 @@ fn dir_writable(dir: &Path) -> bool {
 /// Copy `binary` into the fresh temp file `out`, flush it to disk, then
 /// atomically rename it over `dest`.
 fn stage(out: &mut fs::File, binary: &Path, tmp: &Path, dest: &Path) -> Result<(), String> {
-    let mut src =
-        fs::File::open(binary).map_err(|e| format!("read {}: {e}", binary.display()))?;
+    let mut src = fs::File::open(binary).map_err(|e| format!("read {}: {e}", binary.display()))?;
     std::io::copy(&mut src, out).map_err(|e| format!("copy: {e}"))?;
     out.sync_all().map_err(|e| format!("fsync: {e}"))?;
     #[cfg(unix)]
@@ -180,7 +179,11 @@ fn install(binary: &Path, system: bool) -> Result<PathBuf, String> {
         // pid-unique temp name + create_new: concurrent updaters never share
         // a file, so nobody can rename a half-written binary
         let tmp = dir.join(format!(".pv-new-{}", std::process::id()));
-        let mut out = match fs::OpenOptions::new().write(true).create_new(true).open(&tmp) {
+        let mut out = match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp)
+        {
             Ok(f) => f,
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
                 return Err(format!(
@@ -322,7 +325,11 @@ pub fn run(t: &Theme, o: &Options) -> i32 {
                 match outcome {
                     Ok(dest) => {
                         let _ = fs::remove_dir_all(&tmp);
-                        println!("\n{} {cur} → {tag} → {}", t.green("✓ updated"), dest.display());
+                        println!(
+                            "\n{} {cur} → {tag} → {}",
+                            t.green("✓ updated"),
+                            dest.display()
+                        );
                         path_hint(t, &dest);
                         return 0;
                     }
@@ -370,7 +377,12 @@ pub fn run(t: &Theme, o: &Options) -> i32 {
     let _ = fs::remove_dir_all(&tmp);
     println!("{} cloning {}…", t.dim("»"), o.repo);
     let st = Command::new("git")
-        .args(["clone", "--depth", "1", &format!("https://github.com/{}.git", o.repo)])
+        .args([
+            "clone",
+            "--depth",
+            "1",
+            &format!("https://github.com/{}.git", o.repo),
+        ])
         .arg(&tmp)
         .status();
     if !matches!(st, Ok(s) if s.success()) {
@@ -407,14 +419,20 @@ pub fn run(t: &Theme, o: &Options) -> i32 {
 }
 
 fn path_hint(t: &Theme, dest: &Path) {
-    let dir = dest.parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+    let dir = dest
+        .parent()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_default();
     let in_path = std::env::var("PATH")
         .map(|p| p.split(':').any(|d| d == dir))
         .unwrap_or(false);
     if !in_path {
         println!(
             "{}",
-            t.yellow(&format!("note: {dir} is not on your PATH — add it or run `{}/pv`", dest.display()))
+            t.yellow(&format!(
+                "note: {dir} is not on your PATH — add it or run `{}/pv`",
+                dest.display()
+            ))
         );
     }
 }
@@ -445,8 +463,14 @@ mod tests {
             {"name":"pv-linux-x86_64","browser_download_url":"https://x/x64"},
             {"name":"SHA256SUMS","browser_download_url":"https://x/sums"}
         ]}"#;
-        assert_eq!(asset_url(json, "pv-linux-x86_64").as_deref(), Some("https://x/x64"));
-        assert_eq!(asset_url(json, "SHA256SUMS").as_deref(), Some("https://x/sums"));
+        assert_eq!(
+            asset_url(json, "pv-linux-x86_64").as_deref(),
+            Some("https://x/x64")
+        );
+        assert_eq!(
+            asset_url(json, "SHA256SUMS").as_deref(),
+            Some("https://x/sums")
+        );
         assert_eq!(asset_url(json, "pv-windows.exe"), None);
     }
 
@@ -454,7 +478,10 @@ mod tests {
     fn asset_url_tolerates_whitespace() {
         let json = r#"{ "assets": [ { "name": "pv-linux-x86_64",
             "browser_download_url": "https://x/pv" } ] }"#;
-        assert_eq!(asset_url(json, "pv-linux-x86_64").as_deref(), Some("https://x/pv"));
+        assert_eq!(
+            asset_url(json, "pv-linux-x86_64").as_deref(),
+            Some("https://x/pv")
+        );
         // no assets array at all → no url
         assert_eq!(asset_url("{\"tag_name\":\"v1\"}", "pv-linux-x86_64"), None);
     }
@@ -473,7 +500,8 @@ mod tests {
 
     #[test]
     fn sums_line_accepts_binary_marker_and_uppercase() {
-        let sums = "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855 *pv-linux-x86_64\n";
+        let sums =
+            "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855 *pv-linux-x86_64\n";
         assert_eq!(
             sums_entry(sums, "pv-linux-x86_64").as_deref(),
             Some("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
@@ -483,7 +511,10 @@ mod tests {
     #[test]
     fn rejects_malformed_sums_lines() {
         // short / non-hex hash fields are not checksum lines
-        assert_eq!(sums_entry("deadbeef  pv-linux-x86_64\n", "pv-linux-x86_64"), None);
+        assert_eq!(
+            sums_entry("deadbeef  pv-linux-x86_64\n", "pv-linux-x86_64"),
+            None
+        );
         let bad = format!("{}  pv-linux-x86_64\n", "z".repeat(64));
         assert_eq!(sums_entry(&bad, "pv-linux-x86_64"), None);
         // filename is only a prefix of the wanted name

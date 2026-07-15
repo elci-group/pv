@@ -18,7 +18,7 @@ pub struct PressureReport {
     pub thermal: Option<ResourcePressure>,
     pub mem: MemInfo,
     pub battery_info: Option<procfs::Battery>,
-    pub mem_rate_kb_s: f64,     // positive = available shrinking
+    pub mem_rate_kb_s: f64, // positive = available shrinking
     pub oom_eta_secs: Option<u64>,
     pub overall: u8,
 }
@@ -61,7 +61,10 @@ pub fn measure(trend_ms: u64) -> PressureReport {
     let cpu = ResourcePressure {
         name: "CPU",
         score: cpu_score,
-        detail: format!("load {l1:.2} on {ncpu:.0} cores, psi {:.0}%", psi_cpu.some_avg10),
+        detail: format!(
+            "load {l1:.2} on {ncpu:.0} cores, psi {:.0}%",
+            psi_cpu.some_avg10
+        ),
     };
     let memory = ResourcePressure {
         name: "RAM",
@@ -83,14 +86,22 @@ pub fn measure(trend_ms: u64) -> PressureReport {
 
     let battery = batt.clone().map(|b| {
         // battery pressure = how close to empty while discharging
-        let score = if b.discharging { 100u8.saturating_sub(b.capacity as u8) } else { 0 };
+        let score = if b.discharging {
+            100u8.saturating_sub(b.capacity as u8)
+        } else {
+            0
+        };
         ResourcePressure {
             name: "Battery",
             score,
             detail: format!(
                 "{}%{}",
                 b.capacity,
-                if b.discharging { ", discharging" } else { ", on AC" }
+                if b.discharging {
+                    ", discharging"
+                } else {
+                    ", on AC"
+                }
             ),
         }
     });

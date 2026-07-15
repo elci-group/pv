@@ -63,7 +63,10 @@ pub fn find(id_or_name: &str) -> Option<Session> {
         .or_else(|| {
             all.into_iter().find(|s| {
                 s.id.starts_with(id_or_name)
-                    || s.cmd.join(" ").to_lowercase().contains(&id_or_name.to_lowercase())
+                    || s.cmd
+                        .join(" ")
+                        .to_lowercase()
+                        .contains(&id_or_name.to_lowercase())
             })
         })
 }
@@ -132,7 +135,9 @@ fn libc_setsid() -> i32 {
 
 /// Read the last `n` lines of a session log.
 pub fn tail(s: &Session, n: usize) -> Vec<String> {
-    let Ok(mut f) = fs::File::open(&s.log) else { return vec![] };
+    let Ok(mut f) = fs::File::open(&s.log) else {
+        return vec![];
+    };
     let mut buf = String::new();
     let _ = f.read_to_string(&mut buf);
     let lines: Vec<&str> = buf.lines().collect();

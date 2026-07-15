@@ -49,7 +49,14 @@ pub fn default_hosts() -> &'static str {
 /// Quick online check: ssh BatchMode, 3s timeout, true.
 pub fn online(addr: &str) -> bool {
     Command::new("ssh")
-        .args(["-o", "BatchMode=yes", "-o", "ConnectTimeout=3", addr, "true"])
+        .args([
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "ConnectTimeout=3",
+            addr,
+            "true",
+        ])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
@@ -78,7 +85,9 @@ pub fn probe(addr: &str) -> Option<String> {
 pub fn migrate_command(host: &Host, cmd: &[String], cwd: &str) -> Result<(), String> {
     for tool in ["ssh", "rsync"] {
         if Command::new(tool).arg("--version").output().is_err() {
-            return Err(format!("`{tool}` not found — install it to enable migration"));
+            return Err(format!(
+                "`{tool}` not found — install it to enable migration"
+            ));
         }
     }
     let raw_name = cmd
@@ -96,8 +105,14 @@ pub fn migrate_command(host: &Host, cmd: &[String], cwd: &str) -> Result<(), Str
     println!("[pv] syncing {cwd} → {}:{remote_dir}", host.addr);
     let st = Command::new("rsync")
         .args([
-            "-az", "--info=progress2",
-            "--exclude", "target/", "--exclude", "node_modules/", "--exclude", ".git/",
+            "-az",
+            "--info=progress2",
+            "--exclude",
+            "target/",
+            "--exclude",
+            "node_modules/",
+            "--exclude",
+            ".git/",
             &format!("{cwd}/"),
             &format!("{}:{remote_dir}", host.addr),
         ])
@@ -111,7 +126,11 @@ pub fn migrate_command(host: &Host, cmd: &[String], cwd: &str) -> Result<(), Str
     let st = Command::new("ssh")
         .args([
             &host.addr.clone(),
-            &format!("cd {} && {}", shell_join(std::slice::from_ref(&remote_dir)), shell_join(cmd)),
+            &format!(
+                "cd {} && {}",
+                shell_join(std::slice::from_ref(&remote_dir)),
+                shell_join(cmd)
+            ),
         ])
         .status()
         .map_err(|e| e.to_string())?;
@@ -129,16 +148,28 @@ fn sanitize_job(name: &str) -> String {
     let out: String = name
         .chars()
         .take(40)
-        .map(|c| if c.is_ascii_alphanumeric() || ".-_".contains(c) { c } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || ".-_".contains(c) {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect();
-    if out.is_empty() { "job".into() } else { out }
+    if out.is_empty() {
+        "job".into()
+    } else {
+        out
+    }
 }
 
 fn shell_join(cmd: &[String]) -> String {
     cmd.iter()
         .map(|a| {
             // `~` is safe unquoted: it can only trigger home-dir expansion
-            if a.chars().all(|c| c.is_alphanumeric() || "-._/=+:,~".contains(c)) {
+            if a.chars()
+                .all(|c| c.is_alphanumeric() || "-._/=+:,~".contains(c))
+            {
                 a.clone()
             } else {
                 format!("'{}'", a.replace('\'', "'\\''"))

@@ -28,7 +28,8 @@ struct History {
 
 impl History {
     fn push(&mut self, r: &PressureReport) {
-        self.mem_used_kb.push_back(r.mem.total_kb - r.mem.available_kb);
+        self.mem_used_kb
+            .push_back(r.mem.total_kb - r.mem.available_kb);
         self.swap_used_kb
             .push_back(r.mem.swap_total_kb - r.mem.swap_free_kb);
         self.load1.push_back(procfs::loadavg().0);
@@ -77,12 +78,7 @@ impl History {
         if mean <= 0.01 {
             return (mean, 0.0);
         }
-        let var = self
-            .load1
-            .iter()
-            .map(|x| (x - mean).powi(2))
-            .sum::<f64>()
-            / n as f64;
+        let var = self.load1.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / n as f64;
         (mean, var.sqrt() / mean)
     }
 }
@@ -92,9 +88,9 @@ impl History {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct HabitSlot {
     samples: u64,
-    cpu_ema: f64,   // load1/cores %
-    mem_ema: f64,   // mem used %
-    var_ema: f64,   // load coefficient of variation
+    cpu_ema: f64,            // load1/cores %
+    mem_ema: f64,            // mem used %
+    var_ema: f64,            // load coefficient of variation
     top: Vec<(String, u32)>, // most-seen app categories
 }
 
@@ -146,9 +142,21 @@ impl Habits {
         let hour = notify::local_hour();
         let s = &mut self.slots[hour];
         let a = if s.samples < 50 { 0.2 } else { 0.05 }; // learn fast early
-        s.cpu_ema = if s.samples == 0 { cpu_pct } else { s.cpu_ema * (1.0 - a) + cpu_pct * a };
-        s.mem_ema = if s.samples == 0 { mem_pct } else { s.mem_ema * (1.0 - a) + mem_pct * a };
-        s.var_ema = if s.samples == 0 { cv } else { s.var_ema * (1.0 - a) + cv * a };
+        s.cpu_ema = if s.samples == 0 {
+            cpu_pct
+        } else {
+            s.cpu_ema * (1.0 - a) + cpu_pct * a
+        };
+        s.mem_ema = if s.samples == 0 {
+            mem_pct
+        } else {
+            s.mem_ema * (1.0 - a) + mem_pct * a
+        };
+        s.var_ema = if s.samples == 0 {
+            cv
+        } else {
+            s.var_ema * (1.0 - a) + cv * a
+        };
         for c in categories {
             if let Some(e) = s.top.iter_mut().find(|(k, _)| k == c) {
                 e.1 += 1;
@@ -214,10 +222,7 @@ pub fn oneshot_notices(
             title: "MEMORY OVERPRESSURE".into(),
             gauge: Some(("RAM".into(), used.round() as u8)),
             obs: {
-                let mut v = vec![format!(
-                    "{:.0}% of physical memory committed",
-                    used
-                )];
+                let mut v = vec![format!("{:.0}% of physical memory committed", used)];
                 if let Some(eta) = report.oom_eta_secs {
                     v.push(format!(
                         "projected exhaustion in {}",
@@ -241,7 +246,11 @@ pub fn oneshot_notices(
             title: format!("RECLAIMABLE RESERVE: {}", r.target.to_uppercase()),
             gauge: Some(("RAM".into(), report.memory.score)),
             obs: vec![
-                format!("{} sits idle — {} recoverable", r.target, fmt_kb(r.benefit_kb)),
+                format!(
+                    "{} sits idle — {} recoverable",
+                    r.target,
+                    fmt_kb(r.benefit_kb)
+                ),
                 format!("confidence {}%", r.confidence),
             ],
             suggest: Some(format!("pv suspend {}", r.target)),
@@ -263,7 +272,11 @@ pub fn oneshot_notices(
                 .map(|a| a.display.as_str())
                 .collect();
             out.push(Notice {
-                level: if b.capacity <= 8 { Level::Critical } else { Level::Warning },
+                level: if b.capacity <= 8 {
+                    Level::Critical
+                } else {
+                    Level::Warning
+                },
                 valve: "V-07",
                 title: "BATTERY VENTING".into(),
                 gauge: Some(("BAT".into(), 100u8.saturating_sub(b.capacity as u8))),
@@ -275,7 +288,9 @@ pub fn oneshot_notices(
                         format!("migratable workloads: {}", builds.join(", "))
                     },
                 ],
-                suggest: builds.first().map(|b| format!("pv migrate {}", b.to_lowercase())),
+                suggest: builds
+                    .first()
+                    .map(|b| format!("pv migrate {}", b.to_lowercase())),
             });
         }
     }
@@ -295,13 +310,22 @@ pub fn oneshot_notices(
                 .max_by(|a, b| a.cpu_pct.partial_cmp(&b.cpu_pct).unwrap())
                 .map(|a| a.display.clone());
             out.push(Notice {
-                level: if temp >= 90.0 { Level::Critical } else { Level::Warning },
+                level: if temp >= 90.0 {
+                    Level::Critical
+                } else {
+                    Level::Warning
+                },
                 valve: "V-08",
                 title: "THERMAL OVERPRESSURE".into(),
-                gauge: Some(("TEMP".into(), ((temp - 40.0) / 60.0 * 100.0).clamp(0.0, 100.0) as u8)),
+                gauge: Some((
+                    "TEMP".into(),
+                    ((temp - 40.0) / 60.0 * 100.0).clamp(0.0, 100.0) as u8,
+                )),
                 obs: vec![
                     format!("{temp:.0}°C hottest zone"),
-                    hog.as_ref().map(|h| format!("largest heat source: {h}")).unwrap_or_default(),
+                    hog.as_ref()
+                        .map(|h| format!("largest heat source: {h}"))
+                        .unwrap_or_default(),
                 ]
                 .into_iter()
                 .filter(|s| !s.is_empty())
@@ -330,7 +354,11 @@ fn history_notices(ctx: &Ctx) -> Vec<Notice> {
             title: "MEMORY PRESSURE RISING".into(),
             gauge: Some(("RAM".into(), used as u8)),
             obs: vec![
-                format!("{:.0}% committed and climbing +{:.1} MB/s", used, slope / 1024.0),
+                format!(
+                    "{:.0}% committed and climbing +{:.1} MB/s",
+                    used,
+                    slope / 1024.0
+                ),
                 "trend sustained across the observation window".into(),
             ],
             suggest: ctx
@@ -361,8 +389,12 @@ fn history_notices(ctx: &Ctx) -> Vec<Notice> {
             title: "UNUSUAL DEMAND FOR THIS HOUR".into(),
             gauge: Some(("CPU".into(), cpu_pct.min(100.0) as u8)),
             obs: vec![
-                format!("load {:.0}% — your usual here is {:.0}%", cpu_pct, slot.cpu_ema),
-                hog.map(|h| format!("primary source: {h}")).unwrap_or_default(),
+                format!(
+                    "load {:.0}% — your usual here is {:.0}%",
+                    cpu_pct, slot.cpu_ema
+                ),
+                hog.map(|h| format!("primary source: {h}"))
+                    .unwrap_or_default(),
             ]
             .into_iter()
             .filter(|s| !s.is_empty())
@@ -384,7 +416,10 @@ fn history_notices(ctx: &Ctx) -> Vec<Notice> {
                     "swap grew {} across the window",
                     fmt_kb(ctx.hist.swap_growth_kb() as u64)
                 ),
-                format!("memory stall {:.0}% — the kernel is paging under load", psi_mem.some_avg10),
+                format!(
+                    "memory stall {:.0}% — the kernel is paging under load",
+                    psi_mem.some_avg10
+                ),
             ],
             suggest: Some("relieve pressure or expect stalls".into()),
         });
@@ -399,7 +434,11 @@ fn history_notices(ctx: &Ctx) -> Vec<Notice> {
             title: "ERRATIC DEMAND PATTERN".into(),
             gauge: Some(("VAR".into(), (cv * 100.0).min(100.0) as u8)),
             obs: vec![
-                format!("load swinging ±{:.0}% around mean {:.1}", cv * 100.0, mean_load),
+                format!(
+                    "load swinging ±{:.0}% around mean {:.1}",
+                    cv * 100.0,
+                    mean_load
+                ),
                 "bursty workloads thrash caches and scheduler".into(),
             ],
             suggest: Some("stagger heavy jobs instead of firing them together".into()),
@@ -424,7 +463,14 @@ fn history_notices(ctx: &Ctx) -> Vec<Notice> {
                 if next.top.is_empty() {
                     String::new()
                 } else {
-                    format!("usual suspects: {}", next.top.iter().map(|(c, _)| c.as_str()).collect::<Vec<_>>().join(", "))
+                    format!(
+                        "usual suspects: {}",
+                        next.top
+                            .iter()
+                            .map(|(c, _)| c.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
                 },
             ]
             .into_iter()
@@ -482,7 +528,12 @@ pub fn run_daemon(t: &Theme, interval: u64, desktop: bool) -> i32 {
         let (_, cv) = hist.load_stats();
         let cats: Vec<String> = intents
             .iter()
-            .filter(|(k, _)| apps.iter().find(|a| &a.key == k).map(|a| a.cpu_pct > 5.0 || a.rss_kb > 200_000).unwrap_or(false))
+            .filter(|(k, _)| {
+                apps.iter()
+                    .find(|a| &a.key == k)
+                    .map(|a| a.cpu_pct > 5.0 || a.rss_kb > 200_000)
+                    .unwrap_or(false)
+            })
             .map(|(_, i)| format!("{:?}", i.category).to_lowercase())
             .collect();
         habits.observe(cpu_pct, mem_used_pct(&report), cv, &cats);
@@ -528,13 +579,20 @@ pub fn print_habits(t: &Theme) -> i32 {
         );
         return 0;
     }
-    println!("{}", t.bold("Learned demand profile (per hour, local time)"));
+    println!(
+        "{}",
+        t.bold("Learned demand profile (per hour, local time)")
+    );
     let cur = notify::local_hour();
     for (hour, s) in h.slots.iter().enumerate() {
         if s.samples == 0 {
             continue;
         }
-        let marker = if hour == cur { t.cyan("→") } else { " ".to_string() };
+        let marker = if hour == cur {
+            t.cyan("→")
+        } else {
+            " ".to_string()
+        };
         let cpu_bar = crate::display::bar((s.cpu_ema as u8).min(100), 8);
         let mem_bar = crate::display::bar((s.mem_ema as u8).min(100), 8);
         let cats = if s.top.is_empty() {
@@ -542,7 +600,11 @@ pub fn print_habits(t: &Theme) -> i32 {
         } else {
             format!(
                 "  {}",
-                s.top.iter().map(|(c, _)| c.as_str()).collect::<Vec<_>>().join(", ")
+                s.top
+                    .iter()
+                    .map(|(c, _)| c.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             )
         };
         println!(
@@ -559,7 +621,10 @@ pub fn print_habits(t: &Theme) -> i32 {
     }
     println!(
         "{}",
-        t.dim(&format!("\n{} samples — profile strengthens as the daemon keeps watching.", h.total_samples()))
+        t.dim(&format!(
+            "\n{} samples — profile strengthens as the daemon keeps watching.",
+            h.total_samples()
+        ))
     );
     0
 }
@@ -581,7 +646,11 @@ pub fn run_notify(t: &Theme, desktop: bool) -> i32 {
             title: "ALL VALVES NOMINAL".into(),
             gauge: Some(("SYS".into(), report.overall)),
             obs: vec![
-                format!("RAM {:.0}% · load {:.2} · no reclaimable reserves", mem_used_pct(&report), procfs::loadavg().0),
+                format!(
+                    "RAM {:.0}% · load {:.2} · no reclaimable reserves",
+                    mem_used_pct(&report),
+                    procfs::loadavg().0
+                ),
                 "no action suggested at this time".into(),
             ],
             suggest: None,

@@ -32,8 +32,8 @@ pub struct Intent {
     pub can_migrate: bool,     // restartable on another host (state-free or checkpointable)
     pub remote_friendly: bool, // worth running remotely
     pub gpu: bool,
-    pub never_suspend: bool,   // hard rule: interactive sessions, runtimes
-    pub detail: String,        // extra context line, e.g. "Watching YouTube"
+    pub never_suspend: bool, // hard rule: interactive sessions, runtimes
+    pub detail: String,      // extra context line, e.g. "Watching YouTube"
 }
 
 impl Intent {
@@ -88,14 +88,37 @@ fn classify_cmd(key: &str, cmd: &str, tty: bool) -> Intent {
         i.detail = "survives interruption; incremental artifacts persist".into();
         return i;
     }
-    if matches!(k, "make" | "ninja" | "cmake" | "gcc" | "g++" | "clang" | "cc" | "go" | "javac" | "mvn" | "gradle" | "pnpm" | "npm" | "yarn" | "tsc" | "webpack" | "vite" | "bun") {
-        let mut i = Intent::base(Category::Build, match k {
-            "go" => "Build Go workspace",
-            "javac" | "mvn" | "gradle" => "Build JVM project",
-            "npm" | "yarn" | "pnpm" | "bun" => "JS toolchain task",
-            "vite" | "webpack" | "tsc" => "JS bundle / typecheck",
-            _ => "Compile project",
-        });
+    if matches!(
+        k,
+        "make"
+            | "ninja"
+            | "cmake"
+            | "gcc"
+            | "g++"
+            | "clang"
+            | "cc"
+            | "go"
+            | "javac"
+            | "mvn"
+            | "gradle"
+            | "pnpm"
+            | "npm"
+            | "yarn"
+            | "tsc"
+            | "webpack"
+            | "vite"
+            | "bun"
+    ) {
+        let mut i = Intent::base(
+            Category::Build,
+            match k {
+                "go" => "Build Go workspace",
+                "javac" | "mvn" | "gradle" => "Build JVM project",
+                "npm" | "yarn" | "pnpm" | "bun" => "JS toolchain task",
+                "vite" | "webpack" | "tsc" => "JS bundle / typecheck",
+                _ => "Compile project",
+            },
+        );
         i.can_interrupt = true;
         i.can_migrate = true;
         i.remote_friendly = true;
@@ -109,8 +132,20 @@ fn classify_cmd(key: &str, cmd: &str, tty: bool) -> Intent {
     }
 
     // ----- browsers -----
-    if matches!(k, "firefox" | "chromium" | "chrome" | "google-chrome" | "brave" | "brave-browser" | "vivaldi" | "opera" | "librewolf" | "zen" | "zen-browser")
-        || k.contains("chrom")
+    if matches!(
+        k,
+        "firefox"
+            | "chromium"
+            | "chrome"
+            | "google-chrome"
+            | "brave"
+            | "brave-browser"
+            | "vivaldi"
+            | "opera"
+            | "librewolf"
+            | "zen"
+            | "zen-browser"
+    ) || k.contains("chrom")
     {
         let mut i = Intent::base(Category::Browser, "Web browsing");
         i.interactive = true;
@@ -120,7 +155,18 @@ fn classify_cmd(key: &str, cmd: &str, tty: bool) -> Intent {
     }
 
     // ----- encoders / media -----
-    if matches!(k, "ffmpeg" | "handbrake" | "handbrakecli" | "x264" | "x265" | "avifenc" | "cwebp" | "convert" | "magick") {
+    if matches!(
+        k,
+        "ffmpeg"
+            | "handbrake"
+            | "handbrakecli"
+            | "x264"
+            | "x265"
+            | "avifenc"
+            | "cwebp"
+            | "convert"
+            | "magick"
+    ) {
         let mut i = Intent::base(Category::Encode, "Media encode / transcode");
         i.can_interrupt = true;
         i.can_migrate = true;
@@ -131,8 +177,10 @@ fn classify_cmd(key: &str, cmd: &str, tty: bool) -> Intent {
     }
 
     // ----- LLM / inference -----
-    if matches!(k, "ollama" | "llama-server" | "llama.cpp" | "vllm" | "text-generation-webui" | "koboldcpp")
-        || cl.contains("llama")
+    if matches!(
+        k,
+        "ollama" | "llama-server" | "llama.cpp" | "vllm" | "text-generation-webui" | "koboldcpp"
+    ) || cl.contains("llama")
         || (k == "python" || k == "python3") && (cl.contains("vllm") || cl.contains("transformers"))
     {
         let mut i = Intent::base(Category::Llm, "LLM inference");
@@ -150,7 +198,10 @@ fn classify_cmd(key: &str, cmd: &str, tty: bool) -> Intent {
         i.detail = "never suspend: live session".into();
         return i;
     }
-    if matches!(k, "bash" | "zsh" | "fish" | "sh" | "tmux" | "screen" | "nu" | "xonsh") {
+    if matches!(
+        k,
+        "bash" | "zsh" | "fish" | "sh" | "tmux" | "screen" | "nu" | "xonsh"
+    ) {
         let mut i = Intent::base(Category::Shell, "Interactive shell");
         i.interactive = tty;
         i.never_suspend = tty;
@@ -158,7 +209,10 @@ fn classify_cmd(key: &str, cmd: &str, tty: bool) -> Intent {
     }
 
     // ----- containers / runtimes -----
-    if matches!(k, "docker" | "dockerd" | "containerd" | "podman" | "buildkitd" | "runc" | "kubelet") {
+    if matches!(
+        k,
+        "docker" | "dockerd" | "containerd" | "podman" | "buildkitd" | "runc" | "kubelet"
+    ) {
         let mut i = Intent::base(Category::Container, "Container runtime");
         i.never_suspend = true;
         i.detail = "runtime: freezing breaks containers".into();
@@ -166,7 +220,10 @@ fn classify_cmd(key: &str, cmd: &str, tty: bool) -> Intent {
     }
 
     // ----- backups / sync -----
-    if matches!(k, "rsync" | "restic" | "borg" | "rclone" | "duplicity" | "tar" | "cp" | "mv" | "dd") {
+    if matches!(
+        k,
+        "rsync" | "restic" | "borg" | "rclone" | "duplicity" | "tar" | "cp" | "mv" | "dd"
+    ) {
         let mut i = Intent::base(Category::Backup, "Backup / bulk copy");
         i.can_interrupt = true;
         i.can_migrate = matches!(k, "rsync" | "rclone");
@@ -175,7 +232,10 @@ fn classify_cmd(key: &str, cmd: &str, tty: bool) -> Intent {
     }
 
     // ----- downloads -----
-    if matches!(k, "curl" | "wget" | "aria2c" | "yt-dlp" | "torrent" | "transmission") {
+    if matches!(
+        k,
+        "curl" | "wget" | "aria2c" | "yt-dlp" | "torrent" | "transmission"
+    ) {
         let mut i = Intent::base(Category::Download, "Download");
         i.can_interrupt = true;
         i.detail = "pausable; resumable".into();
@@ -183,7 +243,16 @@ fn classify_cmd(key: &str, cmd: &str, tty: bool) -> Intent {
     }
 
     // ----- databases -----
-    if matches!(k, "postgres" | "postmaster" | "mysqld" | "mariadbd" | "redis-server" | "mongod" | "clickhouse-server") {
+    if matches!(
+        k,
+        "postgres"
+            | "postmaster"
+            | "mysqld"
+            | "mariadbd"
+            | "redis-server"
+            | "mongod"
+            | "clickhouse-server"
+    ) {
         let mut i = Intent::base(Category::Database, "Database server");
         i.never_suspend = true;
         i.detail = "service: never suspend".into();
@@ -191,7 +260,20 @@ fn classify_cmd(key: &str, cmd: &str, tty: bool) -> Intent {
     }
 
     // ----- editors -----
-    if matches!(k, "code" | "codium" | "nvim" | "vim" | "emacs" | "sublime_text" | "zed" | "helix" | "hx" | "kate" | "gedit") {
+    if matches!(
+        k,
+        "code"
+            | "codium"
+            | "nvim"
+            | "vim"
+            | "emacs"
+            | "sublime_text"
+            | "zed"
+            | "helix"
+            | "hx"
+            | "kate"
+            | "gedit"
+    ) {
         let mut i = Intent::base(Category::Editor, "Editing session");
         i.interactive = true;
         i.never_suspend = tty && matches!(k, "nvim" | "vim" | "emacs" | "hx" | "helix");
@@ -200,7 +282,19 @@ fn classify_cmd(key: &str, cmd: &str, tty: bool) -> Intent {
     }
 
     // ----- package management -----
-    if matches!(k, "apt" | "apt-get" | "dpkg" | "dnf" | "yum" | "pacman" | "zypper" | "nix" | "snap" | "flatpak") {
+    if matches!(
+        k,
+        "apt"
+            | "apt-get"
+            | "dpkg"
+            | "dnf"
+            | "yum"
+            | "pacman"
+            | "zypper"
+            | "nix"
+            | "snap"
+            | "flatpak"
+    ) {
         let mut i = Intent::base(Category::App, "Package operation");
         i.never_suspend = true;
         i.detail = "interrupting mid-transaction can corrupt package state".into();
@@ -208,8 +302,44 @@ fn classify_cmd(key: &str, cmd: &str, tty: bool) -> Intent {
     }
 
     // ----- system / desktop plumbing -----
-    if matches!(k, "systemd" | "init" | "sshd" | "dbus-daemon" | "kwin" | "kwin_wayland" | "mutter" | "gnome-shell" | "plasmashell" | "sway" | "wayfire" | "xorg" | "xwayland" | "pipewire" | "wireplumber" | "pulseaudio" | "networkmanager" | "cupsd" | "polkitd" | "upowerd" | "xdg-desktop-portal" | "sddm" | "gdm" | "login" | "tailscaled" | "cloudflared" | "coredns" | "resolved" | "systemd-resolved" | "chronyd" | "ntpd" | "fwupd" | "udisksd" | "accounts-daemon" | "rtkit-daemon")
-        || k.starts_with("cosmic-")
+    if matches!(
+        k,
+        "systemd"
+            | "init"
+            | "sshd"
+            | "dbus-daemon"
+            | "kwin"
+            | "kwin_wayland"
+            | "mutter"
+            | "gnome-shell"
+            | "plasmashell"
+            | "sway"
+            | "wayfire"
+            | "xorg"
+            | "xwayland"
+            | "pipewire"
+            | "wireplumber"
+            | "pulseaudio"
+            | "networkmanager"
+            | "cupsd"
+            | "polkitd"
+            | "upowerd"
+            | "xdg-desktop-portal"
+            | "sddm"
+            | "gdm"
+            | "login"
+            | "tailscaled"
+            | "cloudflared"
+            | "coredns"
+            | "resolved"
+            | "systemd-resolved"
+            | "chronyd"
+            | "ntpd"
+            | "fwupd"
+            | "udisksd"
+            | "accounts-daemon"
+            | "rtkit-daemon"
+    ) || k.starts_with("cosmic-")
         || k.starts_with("plasma-")
         || k.starts_with("gnome-")
         || k.starts_with("xfce4-")
@@ -220,7 +350,19 @@ fn classify_cmd(key: &str, cmd: &str, tty: bool) -> Intent {
         i.can_suspend = false;
         return i;
     }
-    if matches!(k, "dolphin" | "nautilus" | "thunar" | "konsole" | "gnome-terminal" | "alacritty" | "kitty" | "wezterm" | "foot" | "yakuake") {
+    if matches!(
+        k,
+        "dolphin"
+            | "nautilus"
+            | "thunar"
+            | "konsole"
+            | "gnome-terminal"
+            | "alacritty"
+            | "kitty"
+            | "wezterm"
+            | "foot"
+            | "yakuake"
+    ) {
         let mut i = Intent::base(Category::Desktop, "Desktop component");
         i.interactive = true;
         i.never_suspend = true; // terminals hold shells

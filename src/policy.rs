@@ -92,7 +92,12 @@ message = "Throttle {app} — competing with foreground work"
 "#
 }
 
-pub fn evaluate(rules: &[Rule], apps: &[App], categories: &[(String, Category)], report: &PressureReport) -> Vec<PolicyHit> {
+pub fn evaluate(
+    rules: &[Rule],
+    apps: &[App],
+    categories: &[(String, Category)],
+    report: &PressureReport,
+) -> Vec<PolicyHit> {
     let mut hits = Vec::new();
     for rule in rules {
         // global conditions

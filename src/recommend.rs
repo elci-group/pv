@@ -19,14 +19,18 @@ pub enum Action {
 #[allow(dead_code)] // pids is informational for future `pv act`
 pub struct Recommendation {
     pub action: Action,
-    pub target: String,        // app key or resource
-    pub display: String,       // human sentence
-    pub benefit_kb: u64,       // estimated memory reclaimed
-    pub confidence: u8,        // 0..100
+    pub target: String,  // app key or resource
+    pub display: String, // human sentence
+    pub benefit_kb: u64, // estimated memory reclaimed
+    pub confidence: u8,  // 0..100
     pub pids: Vec<u32>,
 }
 
-pub fn recommend(apps: &[App], intents: &[(String, Intent)], report: &PressureReport) -> Vec<Recommendation> {
+pub fn recommend(
+    apps: &[App],
+    intents: &[(String, Intent)],
+    report: &PressureReport,
+) -> Vec<Recommendation> {
     let mut out = Vec::new();
     let intent_of = |key: &str| intents.iter().find(|(k, _)| k == key).map(|(_, i)| i);
 
@@ -35,14 +39,13 @@ pub fn recommend(apps: &[App], intents: &[(String, Intent)], report: &PressureRe
     let cpu_hot = report.cpu.score >= 70;
 
     for app in apps {
-        let Some(intent) = intent_of(&app.key) else { continue };
+        let Some(intent) = intent_of(&app.key) else {
+            continue;
+        };
         let idle = app.cpu_pct < 1.0 && !app.has_audio;
 
         // idle browser under memory pressure -> suspend
-        if matches!(intent.category, Category::Browser)
-            && mem_warm
-            && idle
-            && app.rss_kb > 150_000
+        if matches!(intent.category, Category::Browser) && mem_warm && idle && app.rss_kb > 150_000
         {
             let conf = intent::suspend_confidence(app, intent, 600);
             out.push(Recommendation {
@@ -58,7 +61,11 @@ pub fn recommend(apps: &[App], intents: &[(String, Intent)], report: &PressureRe
         // restartable build under battery pressure -> migrate
         if intent.can_migrate
             && intent.remote_friendly
-            && report.battery.as_ref().map(|b| b.score >= 85).unwrap_or(false)
+            && report
+                .battery
+                .as_ref()
+                .map(|b| b.score >= 85)
+                .unwrap_or(false)
         {
             out.push(Recommendation {
                 action: Action::Migrate,
@@ -108,7 +115,9 @@ pub fn recommend(apps: &[App], intents: &[(String, Intent)], report: &PressureRe
     if let Some(eta) = report.oom_eta_secs {
         if mem_hot && !out.iter().any(|r| r.action == Action::Suspend) {
             if let Some(big) = apps.iter().find(|a| {
-                intent_of(&a.key).map(|i| i.can_suspend && !i.never_suspend).unwrap_or(false)
+                intent_of(&a.key)
+                    .map(|i| i.can_suspend && !i.never_suspend)
+                    .unwrap_or(false)
             }) {
                 out.insert(
                     0,

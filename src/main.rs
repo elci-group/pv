@@ -165,7 +165,9 @@ extern "C" {
 
 fn main() {
     // behave like a normal Unix tool when the reader goes away (pv ps | head)
-    unsafe { signal(13 /*SIGPIPE*/, 0 /*SIG_DFL*/) };
+    unsafe {
+        signal(13 /*SIGPIPE*/, 0 /*SIG_DFL*/)
+    };
     let cli = Cli::parse();
     let theme = Theme::new();
     suspend::gc();
@@ -188,7 +190,11 @@ fn main() {
         Some(Cmd::Policy { apply, init }) => c::policy(&theme, apply, init),
         Some(Cmd::Hosts { init }) => c::hosts(&theme, init),
         Some(Cmd::Migrate { target, to }) => c::migrate(&theme, &target, to),
-        Some(Cmd::Daemon { interval, desktop, install }) => {
+        Some(Cmd::Daemon {
+            interval,
+            desktop,
+            install,
+        }) => {
             if install {
                 daemon::install_service()
             } else {
@@ -197,12 +203,27 @@ fn main() {
         }
         Some(Cmd::Notify { desktop }) => daemon::run_notify(&theme, desktop),
         Some(Cmd::Habits) => daemon::print_habits(&theme),
-        Some(Cmd::Live { interval, model, no_infer }) => {
-            live::run_live(&theme, interval, &model, no_infer)
-        }
-        Some(Cmd::Update { source, system, force, check, repo }) => {
-            update::run(&theme, &update::Options { source, system, force, check, repo })
-        }
+        Some(Cmd::Live {
+            interval,
+            model,
+            no_infer,
+        }) => live::run_live(&theme, interval, &model, no_infer),
+        Some(Cmd::Update {
+            source,
+            system,
+            force,
+            check,
+            repo,
+        }) => update::run(
+            &theme,
+            &update::Options {
+                source,
+                system,
+                force,
+                check,
+                repo,
+            },
+        ),
     };
     std::process::exit(code);
 }

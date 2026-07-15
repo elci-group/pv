@@ -6,7 +6,9 @@ pub struct Theme {
 
 impl Theme {
     pub fn new() -> Self {
-        let force = std::env::var("PV_COLOR").map(|v| v == "always").unwrap_or(false);
+        let force = std::env::var("PV_COLOR")
+            .map(|v| v == "always")
+            .unwrap_or(false);
         Theme {
             enabled: force || (std::env::var("NO_COLOR").is_err() && atty_stdout()),
         }
@@ -18,13 +20,27 @@ impl Theme {
             s.to_string()
         }
     }
-    pub fn bold(&self, s: &str) -> String { self.paint("1", s) }
-    pub fn dim(&self, s: &str) -> String { self.paint("2", s) }
-    pub fn red(&self, s: &str) -> String { self.paint("31", s) }
-    pub fn green(&self, s: &str) -> String { self.paint("32", s) }
-    pub fn yellow(&self, s: &str) -> String { self.paint("33", s) }
-    pub fn cyan(&self, s: &str) -> String { self.paint("36", s) }
-    pub fn magenta(&self, s: &str) -> String { self.paint("35", s) }
+    pub fn bold(&self, s: &str) -> String {
+        self.paint("1", s)
+    }
+    pub fn dim(&self, s: &str) -> String {
+        self.paint("2", s)
+    }
+    pub fn red(&self, s: &str) -> String {
+        self.paint("31", s)
+    }
+    pub fn green(&self, s: &str) -> String {
+        self.paint("32", s)
+    }
+    pub fn yellow(&self, s: &str) -> String {
+        self.paint("33", s)
+    }
+    pub fn cyan(&self, s: &str) -> String {
+        self.paint("36", s)
+    }
+    pub fn magenta(&self, s: &str) -> String {
+        self.paint("35", s)
+    }
 
     /// A compact section divider that remains readable without ANSI colour.
     pub fn section(&self, label: &str) -> String {

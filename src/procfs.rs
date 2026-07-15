@@ -31,16 +31,16 @@ pub struct Process {
     pub state: char,
     pub tty: bool,
     pub comm: String,
-    pub exe: String,      // basename of executable
-    pub cmdline: String,  // full command line, space-joined
+    pub exe: String,       // basename of executable
+    pub cmdline: String,   // full command line, space-joined
     pub argv: Vec<String>, // raw argv, NUL-separated in /proc
     pub uid: u32,
     pub rss_kb: u64,
     pub threads: u32,
-    pub utime: u64,       // ticks
-    pub stime: u64,       // ticks
+    pub utime: u64, // ticks
+    pub stime: u64, // ticks
     pub age_secs: f64,
-    pub has_audio: bool,  // holds an open sound device
+    pub has_audio: bool, // holds an open sound device
     pub kernel_thread: bool,
 }
 
@@ -54,17 +54,17 @@ impl Process {
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct App {
-    pub key: String,          // normalized app key, e.g. "firefox"
-    pub display: String,      // display name, e.g. "Firefox"
+    pub key: String,     // normalized app key, e.g. "firefox"
+    pub display: String, // display name, e.g. "Firefox"
     pub pids: Vec<u32>,
-    pub leader: u32,          // oldest / primary pid
+    pub leader: u32, // oldest / primary pid
     pub rss_kb: u64,
-    pub cpu_pct: f64,         // sampled aggregate cpu%
-    pub state: char,          // "best" state across members
+    pub cpu_pct: f64, // sampled aggregate cpu%
+    pub state: char,  // "best" state across members
     pub tty: bool,
     pub has_audio: bool,
-    pub cmdline: String,      // representative cmdline (leader's)
-    pub argv: Vec<String>,    // leader's raw argv
+    pub cmdline: String,   // representative cmdline (leader's)
+    pub argv: Vec<String>, // leader's raw argv
     pub age_secs: f64,
     pub kernel: bool,
 }
@@ -286,7 +286,9 @@ pub fn meminfo() -> MemInfo {
     if let Some(s) = read_to_string(Path::new("/proc/meminfo")) {
         for line in s.lines() {
             let mut it = line.split_whitespace();
-            let (Some(k), Some(v)) = (it.next(), it.next()) else { continue };
+            let (Some(k), Some(v)) = (it.next(), it.next()) else {
+                continue;
+            };
             let v: u64 = v.parse().unwrap_or(0);
             match k {
                 "MemTotal:" => m.total_kb = v,
@@ -314,7 +316,9 @@ pub fn loadavg() -> (f64, f64, f64) {
 }
 
 pub fn cpu_count() -> usize {
-    std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1)
+    std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
 }
 
 // ---------- PSI ----------
@@ -357,7 +361,10 @@ pub fn battery() -> Option<Battery> {
     let rd = fs::read_dir("/sys/class/power_supply").ok()?;
     for e in rd.flatten() {
         let p = e.path();
-        if read_to_string(&p.join("type")).map(|t| t.trim() == "Battery").unwrap_or(false) {
+        if read_to_string(&p.join("type"))
+            .map(|t| t.trim() == "Battery")
+            .unwrap_or(false)
+        {
             let capacity = read_to_string(&p.join("capacity"))?.trim().parse().ok()?;
             let status = read_to_string(&p.join("status")).unwrap_or_default();
             return Some(Battery {
@@ -385,5 +392,3 @@ pub fn hottest_thermal() -> Option<f64> {
     }
     max
 }
-
-

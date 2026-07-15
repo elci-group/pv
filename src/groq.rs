@@ -21,10 +21,12 @@ pub fn api_key() -> Option<String> {
         .ok()
         .filter(|k| !k.trim().is_empty())
         .or_else(|| {
-            std::fs::read_to_string(crate::procfs::xdg("XDG_CONFIG_HOME", ".config").join("pv/groq_api_key"))
-                .ok()
-                .map(|s| s.trim().to_string())
-                .filter(|k| !k.is_empty())
+            std::fs::read_to_string(
+                crate::procfs::xdg("XDG_CONFIG_HOME", ".config").join("pv/groq_api_key"),
+            )
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|k| !k.is_empty())
         })
 }
 
@@ -94,11 +96,17 @@ pub fn stream(model: &str, system: &str, user: &str, key: &str) -> Receiver<Groq
         let spawned = Command::new("curl")
             .args([
                 "-sN",
-                "-X", "POST", URL,
-                "-K", &config_path,
-                "-H", "Content-Type: application/json",
-                "--data-binary", "@-",
-                "--max-time", "30",
+                "-X",
+                "POST",
+                URL,
+                "-K",
+                &config_path,
+                "-H",
+                "Content-Type: application/json",
+                "--data-binary",
+                "@-",
+                "--max-time",
+                "30",
             ])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -152,7 +160,9 @@ pub fn stream(model: &str, system: &str, user: &str, key: &str) -> Receiver<Groq
         } else {
             let _ = tx.send(GroqEvent::Error(format!(
                 "stream ended without tokens ({})",
-                status.map(|s| s.to_string()).unwrap_or_else(|| "killed".into())
+                status
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "killed".into())
             )));
         }
     });
@@ -239,7 +249,10 @@ mod tests {
     #[test]
     fn extracts_escaped_content() {
         let chunk = r#"{"choices":[{"delta":{"content":"line one\nline \"two\"\u00b0C"}}]}"#;
-        assert_eq!(extract_field(chunk, "content"), Some("line one\nline \"two\"°C".into()));
+        assert_eq!(
+            extract_field(chunk, "content"),
+            Some("line one\nline \"two\"°C".into())
+        );
     }
 
     #[test]
@@ -251,7 +264,10 @@ mod tests {
     #[test]
     fn extracts_error_message() {
         let body = r#"{"error":{"message":"Invalid API Key","type":"authentication_error"}}"#;
-        assert_eq!(extract_field(body, "message"), Some("Invalid API Key".into()));
+        assert_eq!(
+            extract_field(body, "message"),
+            Some("Invalid API Key".into())
+        );
     }
 
     #[test]
@@ -267,7 +283,10 @@ mod tests {
         let path = cfg.0.clone();
         assert!(path.starts_with(crate::procfs::xdg("XDG_DATA_HOME", ".local/share").join("pv")));
         use std::os::unix::fs::PermissionsExt;
-        let mode = std::fs::metadata(&path).expect("metadata").permissions().mode();
+        let mode = std::fs::metadata(&path)
+            .expect("metadata")
+            .permissions()
+            .mode();
         assert_eq!(mode & 0o777, 0o600);
         let body = std::fs::read_to_string(&path).expect("read");
         assert_eq!(body, "header = \"Authorization: Bearer gsk_test123\"\n");

@@ -35,8 +35,15 @@ struct Winsize {
 }
 
 fn term_size() -> (usize, usize) {
-    let mut ws = Winsize { ws_row: 0, ws_col: 0, ws_x: 0, ws_y: 0 };
-    unsafe { ioctl(1, 0x5413 /* TIOCGWINSZ */, &mut ws as *mut Winsize) };
+    let mut ws = Winsize {
+        ws_row: 0,
+        ws_col: 0,
+        ws_x: 0,
+        ws_y: 0,
+    };
+    unsafe {
+        ioctl(1, 0x5413 /* TIOCGWINSZ */, &mut ws as *mut Winsize)
+    };
     if ws.ws_col == 0 {
         (80, 24)
     } else {
@@ -45,7 +52,10 @@ fn term_size() -> (usize, usize) {
 }
 
 fn run_stty(args: &[&str]) -> Option<String> {
-    let out = std::process::Command::new("stty").args(args).output().ok()?;
+    let out = std::process::Command::new("stty")
+        .args(args)
+        .output()
+        .ok()?;
     if out.status.success() {
         Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
     } else {
@@ -154,7 +164,11 @@ fn infer_prompt(apps: &[App], intents: &[(String, Intent)], r: &PressureReport) 
         procfs::psi("io").map(|p| p.some_avg10).unwrap_or(0.0),
     );
     if let Some(b) = &r.battery_info {
-        s.push_str(&format!(" | BAT {}%{}", b.capacity, if b.discharging { " discharging" } else { " AC" }));
+        s.push_str(&format!(
+            " | BAT {}%{}",
+            b.capacity,
+            if b.discharging { " discharging" } else { " AC" }
+        ));
     }
     if let Some(t) = procfs::hottest_thermal() {
         s.push_str(&format!(" | THERM {t:.0}C"));
@@ -165,17 +179,24 @@ fn infer_prompt(apps: &[App], intents: &[(String, Intent)], r: &PressureReport) 
         s.push_str(&format!(
             " {}({:?},{:.0}%cpu,{})",
             app.display,
-            int.map(|i| i.category).unwrap_or(crate::intent::Category::Unknown),
+            int.map(|i| i.category)
+                .unwrap_or(crate::intent::Category::Unknown),
             app.cpu_pct,
             fmt_kb(app.rss_kb)
         ));
     }
     let susp = suspend::load_suspended();
     if !susp.is_empty() {
-        let names: Vec<String> = susp.iter().map(|x| format!("{}({})", x.key, fmt_kb(x.rss_kb))).collect();
+        let names: Vec<String> = susp
+            .iter()
+            .map(|x| format!("{}({})", x.key, fmt_kb(x.rss_kb)))
+            .collect();
         s.push_str(&format!(" | SUSPENDED: {}", names.join(",")));
     }
-    let running = crate::session::list().into_iter().filter(|s| crate::session::is_alive(s)).count();
+    let running = crate::session::list()
+        .into_iter()
+        .filter(|s| crate::session::is_alive(s))
+        .count();
     if running > 0 {
         s.push_str(&format!(" | PV-SESSIONS: {running} running"));
     }
@@ -185,10 +206,19 @@ fn infer_prompt(apps: &[App], intents: &[(String, Intent)], r: &PressureReport) 
 /// Signature of "meaningful" state — inference re-fires when this changes.
 fn state_sig(apps: &[App], r: &PressureReport) -> u64 {
     let mut sig: u64 = 0;
-    sig = sig.wrapping_mul(31).wrapping_add((r.memory.score / 5) as u64);
+    sig = sig
+        .wrapping_mul(31)
+        .wrapping_add((r.memory.score / 5) as u64);
     sig = sig.wrapping_mul(31).wrapping_add((r.cpu.score / 10) as u64);
-    sig = sig.wrapping_mul(31).wrapping_add(r.oom_eta_secs.map(|_| 1).unwrap_or(0));
-    sig = sig.wrapping_mul(31).wrapping_add(r.battery_info.as_ref().map(|b| (b.capacity / 10) as u64).unwrap_or(0));
+    sig = sig
+        .wrapping_mul(31)
+        .wrapping_add(r.oom_eta_secs.map(|_| 1).unwrap_or(0));
+    sig = sig.wrapping_mul(31).wrapping_add(
+        r.battery_info
+            .as_ref()
+            .map(|b| (b.capacity / 10) as u64)
+            .unwrap_or(0),
+    );
     for a in apps.iter().take(3) {
         for b in a.key.bytes() {
             sig = sig.wrapping_mul(31).wrapping_add(b as u64);
@@ -211,7 +241,11 @@ fn wrap(text: &str, w: usize) -> Vec<String> {
     let mut lines = Vec::new();
     let mut cur = String::new();
     for word in text.split_whitespace() {
-        let need = if cur.is_empty() { word.len() } else { cur.len() + 1 + word.len() };
+        let need = if cur.is_empty() {
+            word.len()
+        } else {
+            cur.len() + 1 + word.len()
+        };
         if need > w && !cur.is_empty() {
             lines.push(std::mem::take(&mut cur));
         }
@@ -249,11 +283,19 @@ fn render(
         "{}{}{}",
         fc(t, "╔═"),
         fc(t, &head),
-        fc(t, &format!("{}╗", "═".repeat((w - 2).saturating_sub(vis(&head) + 1))))
+        fc(
+            t,
+            &format!("{}╗", "═".repeat((w - 2).saturating_sub(vis(&head) + 1)))
+        )
     ));
 
     let border = |content: String, visible: usize| -> String {
-        format!("{} {} {}", fc(t, "║"), pad_to(content, visible, inner), fc(t, "║"))
+        format!(
+            "{} {} {}",
+            fc(t, "║"),
+            pad_to(content, visible, inner),
+            fc(t, "║")
+        )
     };
     let sep = |title: &str| -> String {
         let seg = format!("─[ {title} ]");
@@ -261,7 +303,10 @@ fn render(
             "{}{}{}",
             fc(t, "╟"),
             fc(t, &seg),
-            fc(t, &format!("{}╢", "─".repeat((w - 2).saturating_sub(vis(&seg) + 1))))
+            fc(
+                t,
+                &format!("{}╢", "─".repeat((w - 2).saturating_sub(vis(&seg) + 1)))
+            )
         )
     };
 
@@ -287,14 +332,28 @@ fn render(
     out.push(border(g1, vis(&g1_plain)));
 
     // gauges line 2
-    let bat = r.battery_info.as_ref().map(|b| format!("BAT {}%{}", b.capacity, if b.discharging { "▼" } else { "▲" })).unwrap_or_else(|| "BAT --".into());
-    let therm = procfs::hottest_thermal().map(|t| format!("{t:.0}°C")).unwrap_or_else(|| "--".into());
+    let bat = r
+        .battery_info
+        .as_ref()
+        .map(|b| {
+            format!(
+                "BAT {}%{}",
+                b.capacity,
+                if b.discharging { "▼" } else { "▲" }
+            )
+        })
+        .unwrap_or_else(|| "BAT --".into());
+    let therm = procfs::hottest_thermal()
+        .map(|t| format!("{t:.0}°C"))
+        .unwrap_or_else(|| "--".into());
     let g2 = format!(
         "LOAD {:.2}/{}  MEM {:+.1}MB/s{}  THERM {}  {}",
         procfs::loadavg().0,
         procfs::cpu_count(),
         -r.mem_rate_kb_s / 1024.0,
-        r.oom_eta_secs.map(|e| format!("  OOM~{}", crate::pressure::fmt_eta(e))).unwrap_or_default(),
+        r.oom_eta_secs
+            .map(|e| format!("  OOM~{}", crate::pressure::fmt_eta(e)))
+            .unwrap_or_default(),
         therm,
         bat
     );
@@ -304,9 +363,15 @@ fn render(
     out.push(sep("processes"));
     let susp = suspend::load_suspended();
     let max_apps = rows.saturating_sub(16).clamp(3, 12);
-    for app in apps.iter().filter(|a| a.rss_kb > 8_000 || a.cpu_pct > 2.0).take(max_apps) {
+    for app in apps
+        .iter()
+        .filter(|a| a.rss_kb > 8_000 || a.cpu_pct > 2.0)
+        .take(max_apps)
+    {
         let int = intents.iter().find(|(k, _)| k == &app.key).map(|(_, i)| i);
-        let cat = int.map(|i| format!("{:?}", i.category).to_lowercase()).unwrap_or_else(|| "?".into());
+        let cat = int
+            .map(|i| format!("{:?}", i.category).to_lowercase())
+            .unwrap_or_else(|| "?".into());
         let trend = match prev_rss.get(&app.key) {
             Some(&p) if app.rss_kb > p + 10_000 => t.red("▲"),
             Some(&p) if app.rss_kb + 10_000 < p => t.green("▼"),
@@ -361,7 +426,11 @@ fn render(
             out.push(border(t.dim(&l), vis(&l)));
         }
     }
-    let note = if key_present { format!("infer: {}", infer.note) } else { String::new() };
+    let note = if key_present {
+        format!("infer: {}", infer.note)
+    } else {
+        String::new()
+    };
     out.push(border(t.dim(&note), vis(&note)));
 
     // footer
@@ -370,7 +439,10 @@ fn render(
         "{}{}{}",
         fc(t, "╚═"),
         fc(t, foot),
-        fc(t, &format!("{}╝", "═".repeat((w - 2).saturating_sub(vis(foot) + 1))))
+        fc(
+            t,
+            &format!("{}╝", "═".repeat((w - 2).saturating_sub(vis(foot) + 1)))
+        )
     ));
     out.join("\n")
 }

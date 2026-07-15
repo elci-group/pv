@@ -46,6 +46,7 @@ struct Model {
     variance: f64,
 }
 
+#[rustfmt::skip]
 const MODELS: &[Model] = &[
     Model { id: "llama-3.1-8b-instant",                  tier: 1.0, tok_s: 840,  ttft_s: 0.22, price_in: 0.05,  price_out: 0.08, quality: 42.0, verbosity: 0.9, variance: 0.10 },
     Model { id: "meta-llama/llama-4-scout-17b-16e-instruct", tier: 2.0, tok_s: 594, ttft_s: 0.25, price_in: 0.11, price_out: 0.34, quality: 55.0, verbosity: 1.0, variance: 0.07 },
@@ -79,27 +80,41 @@ struct Workload {
 
 const WORKLOADS: &[Workload] = &[
     Workload {
-        name: "single-core", cores: 1, agents: 1,
+        name: "single-core",
+        cores: 1,
+        agents: 1,
         procs: &[
             "python agent.py --loop research      38%cpu   385MB",
             "sqlite3 .agent/state.db               2%cpu   128MB",
         ],
-        ctx_in: 1_800, ctx_out: 220, events_hr: 18.0,
-        req_tier: 1.0, freshness_need_s: 120.0, active_hr_day: 6.0,
+        ctx_in: 1_800,
+        ctx_out: 220,
+        events_hr: 18.0,
+        req_tier: 1.0,
+        freshness_need_s: 120.0,
+        active_hr_day: 6.0,
     },
     Workload {
-        name: "dual-core", cores: 2, agents: 2,
+        name: "dual-core",
+        cores: 2,
+        agents: 2,
         procs: &[
             "python agent.py --role researcher    41%cpu   512MB",
             "python agent.py --role writer        36%cpu   470MB",
             "node tools/sandbox.js                 8%cpu   210MB",
             "redis-server :6379                    1%cpu    60MB",
         ],
-        ctx_in: 2_600, ctx_out: 300, events_hr: 26.0,
-        req_tier: 2.0, freshness_need_s: 90.0, active_hr_day: 7.0,
+        ctx_in: 2_600,
+        ctx_out: 300,
+        events_hr: 26.0,
+        req_tier: 2.0,
+        freshness_need_s: 90.0,
+        active_hr_day: 7.0,
     },
     Workload {
-        name: "quad-core", cores: 4, agents: 4,
+        name: "quad-core",
+        cores: 4,
+        agents: 4,
         procs: &[
             "python orchestrator.py               22%cpu   640MB",
             "python worker.py --id w1..w4    4x  55%cpu   2.1GB",
@@ -107,11 +122,17 @@ const WORKLOADS: &[Workload] = &[
             "postgres -D var/db                   6%cpu   420MB",
             "python indexer.py --embed           30%cpu   890MB",
         ],
-        ctx_in: 4_200, ctx_out: 420, events_hr: 40.0,
-        req_tier: 3.0, freshness_need_s: 60.0, active_hr_day: 8.0,
+        ctx_in: 4_200,
+        ctx_out: 420,
+        events_hr: 40.0,
+        req_tier: 3.0,
+        freshness_need_s: 60.0,
+        active_hr_day: 8.0,
     },
     Workload {
-        name: "octo-core", cores: 8, agents: 8,
+        name: "octo-core",
+        cores: 8,
+        agents: 8,
         procs: &[
             "python orchestrator.py               28%cpu   900MB",
             "python worker.py --id w1..w8    8x 310%cpu   5.6GB",
@@ -120,11 +141,17 @@ const WORKLOADS: &[Workload] = &[
             "qdrant                              12%cpu   1.1GB",
             "chromium --headless --render        45%cpu   1.6GB",
         ],
-        ctx_in: 7_000, ctx_out: 600, events_hr: 65.0,
-        req_tier: 3.5, freshness_need_s: 45.0, active_hr_day: 9.0,
+        ctx_in: 7_000,
+        ctx_out: 600,
+        events_hr: 65.0,
+        req_tier: 3.5,
+        freshness_need_s: 45.0,
+        active_hr_day: 9.0,
     },
     Workload {
-        name: "12-core", cores: 12, agents: 12,
+        name: "12-core",
+        cores: 12,
+        agents: 12,
         procs: &[
             "python orchestrator.py               31%cpu   1.2GB",
             "python worker.py --id w1..w12  12x 520%cpu   9.8GB",
@@ -135,8 +162,12 @@ const WORKLOADS: &[Workload] = &[
             "python llm_indexer.py --repo        140%cpu  4.4GB",
             "ffmpeg -i cast.mp4                   80%cpu   500MB",
         ],
-        ctx_in: 11_000, ctx_out: 800, events_hr: 95.0,
-        req_tier: 4.0, freshness_need_s: 30.0, active_hr_day: 10.0,
+        ctx_in: 11_000,
+        ctx_out: 800,
+        events_hr: 95.0,
+        req_tier: 4.0,
+        freshness_need_s: 30.0,
+        active_hr_day: 10.0,
     },
 ];
 
@@ -211,11 +242,11 @@ impl Arch {
 
 struct Outcome {
     calls_hr: f64,
-    accuracy: f64,   // 0-100, tier-fit adjusted
-    stability: f64,  // 0-1, display determinism / absence of churn
+    accuracy: f64,  // 0-100, tier-fit adjusted
+    stability: f64, // 0-1, display determinism / absence of churn
     staleness_s: f64,
     cost_day: f64,
-    cba: f64,        // weighted composite 0-1
+    cba: f64, // weighted composite 0-1
     pass: bool,
 }
 
@@ -258,10 +289,7 @@ fn simulate(m: &Model, w: &Workload, arch: Arch) -> Outcome {
     // $0.50/day reference: free-tier-ish supervision scores ~1, $2/day ~0.2
     let cost_score = 1.0 / (1.0 + cost_day / 0.50);
 
-    let cba = 0.45 * (accuracy / 100.0)
-        + 0.25 * stability
-        + 0.15 * fresh_score
-        + 0.15 * cost_score;
+    let cba = 0.45 * (accuracy / 100.0) + 0.25 * stability + 0.15 * fresh_score + 0.15 * cost_score;
 
     Outcome {
         calls_hr,
@@ -286,7 +314,10 @@ struct Ranked<'a> {
 fn rank<'a>(w: &Workload, arch: Arch) -> Vec<Ranked<'a>> {
     let mut v: Vec<Ranked> = MODELS
         .iter()
-        .map(|m| Ranked { model: m, out: simulate(m, w, arch) })
+        .map(|m| Ranked {
+            model: m,
+            out: simulate(m, w, arch),
+        })
         .collect();
     v.sort_by(|a, b| b.out.cba.partial_cmp(&a.out.cba).unwrap());
     v
@@ -302,7 +333,11 @@ fn cheapest_pass<'a>(w: &Workload, arch: Arch) -> Option<Ranked<'a>> {
 }
 
 fn money(x: f64) -> String {
-    if x < 0.01 { format!("${:.4}", x) } else { format!("${:.2}", x) }
+    if x < 0.01 {
+        format!("${:.4}", x)
+    } else {
+        format!("${:.2}", x)
+    }
 }
 
 fn h1(s: &mut String, t: &str, md: bool) {
@@ -334,41 +369,79 @@ fn build_report(md: bool) -> String {
     let mut s = String::new();
 
     if md {
-        let _ = writeln!(s, "# pv bench — Groq model CBA under simulated agentic workloads\n");
+        let _ = writeln!(
+            s,
+            "# pv bench — Groq model CBA under simulated agentic workloads\n"
+        );
         let _ = writeln!(s, "Generated by `pv_bench` (fully simulated: pre-defined faux workloads, no\nreal CPU/API use). Sources: [Groq pricing](https://groq.com/pricing/),");
-        let _ = writeln!(s, "[supported models](https://console.groq.com/docs/models) (2026-07-15).");
-        let _ = writeln!(s, "Quality indices are labelled estimates; workload shapes are synthetic.");
+        let _ = writeln!(
+            s,
+            "[supported models](https://console.groq.com/docs/models) (2026-07-15)."
+        );
+        let _ = writeln!(
+            s,
+            "Quality indices are labelled estimates; workload shapes are synthetic."
+        );
     } else {
-        let _ = writeln!(s, "pv bench — Groq model CBA under simulated agentic workloads");
-        let _ = writeln!(s, "fully simulated: pre-defined faux values, no real CPU/API use");
-        let _ = writeln!(s, "sources: groq.com/pricing, console.groq.com/docs/models (2026-07-15)");
+        let _ = writeln!(
+            s,
+            "pv bench — Groq model CBA under simulated agentic workloads"
+        );
+        let _ = writeln!(
+            s,
+            "fully simulated: pre-defined faux values, no real CPU/API use"
+        );
+        let _ = writeln!(
+            s,
+            "sources: groq.com/pricing, console.groq.com/docs/models (2026-07-15)"
+        );
     }
 
     // ---- model table -------------------------------------------------------
     h1(&mut s, "Model table (all Groq text models, 2026-07)", md);
     if md {
-        let _ = writeln!(s, "| model | tier | tok/s | ttft | $in/1M | $out/1M | quality* | verbosity |");
-        let _ = writeln!(s, "|-------|-----:|------:|-----:|-------:|--------:|---------:|----------:|");
+        let _ = writeln!(
+            s,
+            "| model | tier | tok/s | ttft | $in/1M | $out/1M | quality* | verbosity |"
+        );
+        let _ = writeln!(
+            s,
+            "|-------|-----:|------:|-----:|-------:|--------:|---------:|----------:|"
+        );
         for m in MODELS {
-            let _ = writeln!(s, "| `{}` | {:.1} | {} | {:.2}s | ${:.3} | ${:.2} | {:.0} | {:.1}x |",
-                m.id, m.tier, m.tok_s, m.ttft_s, m.price_in, m.price_out, m.quality, m.verbosity);
+            let _ = writeln!(
+                s,
+                "| `{}` | {:.1} | {} | {:.2}s | ${:.3} | ${:.2} | {:.0} | {:.1}x |",
+                m.id, m.tier, m.tok_s, m.ttft_s, m.price_in, m.price_out, m.quality, m.verbosity
+            );
         }
         let _ = writeln!(s, "\n\\* agentic-usefulness estimate from public leaderboards; verbosity = output-token multiplier (reasoning models emit more).");
         let _ = writeln!(s, "Excluded: whisper/orpheus (audio), prompt-guard/safeguard (safety), groq/compound (systems, passthrough pricing).");
     } else {
-        let _ = writeln!(s, "{:<40} {:>4} {:>6} {:>5} {:>8} {:>7} {:>5} {:>4}",
-            "model", "tier", "tok/s", "ttft", "$in/1M", "$out/1M", "qual*", "verb");
+        let _ = writeln!(
+            s,
+            "{:<40} {:>4} {:>6} {:>5} {:>8} {:>7} {:>5} {:>4}",
+            "model", "tier", "tok/s", "ttft", "$in/1M", "$out/1M", "qual*", "verb"
+        );
         for m in MODELS {
-            let _ = writeln!(s, "{:<40} {:>4.1} {:>6} {:>4.2}s {:>8.3} {:>7.2} {:>5.0} {:>3.1}x",
-                m.id, m.tier, m.tok_s, m.ttft_s, m.price_in, m.price_out, m.quality, m.verbosity);
+            let _ = writeln!(
+                s,
+                "{:<40} {:>4.1} {:>6} {:>4.2}s {:>8.3} {:>7.2} {:>5.0} {:>3.1}x",
+                m.id, m.tier, m.tok_s, m.ttft_s, m.price_in, m.price_out, m.quality, m.verbosity
+            );
         }
-        let _ = writeln!(s, "* quality = agentic-usefulness estimate; excluded: audio/safety/systems models");
+        let _ = writeln!(
+            s,
+            "* quality = agentic-usefulness estimate; excluded: audio/safety/systems models"
+        );
     }
 
     // ---- assumptions -------------------------------------------------------
     h1(&mut s, "Architectures & assumptions", md);
-    code(&mut s, &format!(
-"A cached-nonstream  refire = events + {}x 120 s-heartbeats (coalesced), one\n\
+    code(
+        &mut s,
+        &format!(
+            "A cached-nonstream  refire = events + {}x 120 s-heartbeats (coalesced), one\n\
  \x20                  non-streaming call, atomic panel swap on completion\n\
 B streaming         refire every {} s, tokens displayed as they arrive\n\
 accuracy            quality x tier-fit (penalty {:.0}%/tier below requirement)\n\
@@ -378,8 +451,14 @@ stability           A: 0.96 - churn(events) - 0.3*variance (cache dedupes)\n\
 \x20                   B: 0.78 - variance - 0.04 flicker\n\
 staleness           A: min(1800/events, 60)s   B: interval/2 + ttft\n\
 cba = 0.45*acc + 0.25*stability + 0.15*freshness + 0.15*cost (ref $0.50/day)",
-        HEARTBEATS_HR as u32, STREAM_INTERVAL_S as u32, TIER_PENALTY * 100.0,
-        BASE_PASS, PASS_PER_TIER), md);
+            HEARTBEATS_HR as u32,
+            STREAM_INTERVAL_S as u32,
+            TIER_PENALTY * 100.0,
+            BASE_PASS,
+            PASS_PER_TIER
+        ),
+        md,
+    );
 
     // ---- measured temperature sweep ---------------------------------------------
     temp_section(&mut s, md);
@@ -387,9 +466,21 @@ cba = 0.45*acc + 0.25*stability + 0.15*freshness + 0.15*cost (ref $0.50/day)",
     // ---- per-workload detail ------------------------------------------------
     h1(&mut s, "Workload results", md);
     for w in WORKLOADS {
-        let agents = if w.agents == 1 { "1 agent".to_string() } else { format!("{} agents", w.agents) };
-        let cores = if w.cores == 1 { "1 core".to_string() } else { format!("{} cores", w.cores) };
-        h2(&mut s, &format!("{} — {agents}, faux ps snapshot", w.name), md);
+        let agents = if w.agents == 1 {
+            "1 agent".to_string()
+        } else {
+            format!("{} agents", w.agents)
+        };
+        let cores = if w.cores == 1 {
+            "1 core".to_string()
+        } else {
+            format!("{} cores", w.cores)
+        };
+        h2(
+            &mut s,
+            &format!("{} — {agents}, faux ps snapshot", w.name),
+            md,
+        );
         let procs = w.procs.join("\n");
         code(&mut s, &procs, md);
         if md {
@@ -401,93 +492,196 @@ cba = 0.45*acc + 0.25*stability + 0.15*freshness + 0.15*cost (ref $0.50/day)",
         }
         for arch in [Arch::CachedNonStream, Arch::Streaming] {
             let ranked = rank(w, arch);
-            let _ = writeln!(s, "[{}] calls/h: {:.0}", arch.label(), ranked[0].out.calls_hr);
+            let _ = writeln!(
+                s,
+                "[{}] calls/h: {:.0}",
+                arch.label(),
+                ranked[0].out.calls_hr
+            );
             if md {
-                let _ = writeln!(s, "| # | model | acc | stable | stale | $/day | cba | pass |");
-                let _ = writeln!(s, "|--:|-------|----:|-------:|------:|------:|----:|:----:|");
+                let _ = writeln!(
+                    s,
+                    "| # | model | acc | stable | stale | $/day | cba | pass |"
+                );
+                let _ = writeln!(
+                    s,
+                    "|--:|-------|----:|-------:|------:|------:|----:|:----:|"
+                );
                 for (i, r) in ranked.iter().take(4).enumerate() {
-                    let _ = writeln!(s, "| {} | `{}` | {:.0} | {:.2} | {:.0}s | {} | {:.3} | {} |",
-                        i + 1, r.model.id, r.out.accuracy, r.out.stability,
-                        r.out.staleness_s, money(r.out.cost_day), r.out.cba,
-                        if r.out.pass { "yes" } else { "NO" });
+                    let _ = writeln!(
+                        s,
+                        "| {} | `{}` | {:.0} | {:.2} | {:.0}s | {} | {:.3} | {} |",
+                        i + 1,
+                        r.model.id,
+                        r.out.accuracy,
+                        r.out.stability,
+                        r.out.staleness_s,
+                        money(r.out.cost_day),
+                        r.out.cba,
+                        if r.out.pass { "yes" } else { "NO" }
+                    );
                 }
                 let _ = writeln!(s);
             } else {
-                let _ = writeln!(s, "  {:<40} {:>4} {:>6} {:>6} {:>8} {:>6}  {}",
-                    "model", "acc", "stable", "stale", "$/day", "cba", "pass");
+                let _ = writeln!(
+                    s,
+                    "  {:<40} {:>4} {:>6} {:>6} {:>8} {:>6}  {}",
+                    "model", "acc", "stable", "stale", "$/day", "cba", "pass"
+                );
                 for r in ranked.iter().take(4) {
-                    let _ = writeln!(s, "  {:<40} {:>4.0} {:>6.2} {:>5.0}s {:>8} {:>6.3}  {}",
-                        r.model.id, r.out.accuracy, r.out.stability,
-                        r.out.staleness_s, money(r.out.cost_day), r.out.cba,
-                        if r.out.pass { "yes" } else { "NO" });
+                    let _ = writeln!(
+                        s,
+                        "  {:<40} {:>4.0} {:>6.2} {:>5.0}s {:>8} {:>6.3}  {}",
+                        r.model.id,
+                        r.out.accuracy,
+                        r.out.stability,
+                        r.out.staleness_s,
+                        money(r.out.cost_day),
+                        r.out.cba,
+                        if r.out.pass { "yes" } else { "NO" }
+                    );
                 }
             }
         }
     }
 
     // ---- accuracy cliff ------------------------------------------------------
-    h1(&mut s, "Accuracy cliff — cheapest passing model per workload", md);
+    h1(
+        &mut s,
+        "Accuracy cliff — cheapest passing model per workload",
+        md,
+    );
     if md {
-        let _ = writeln!(s, "| workload | req tier | cached-nonstream | $/day | streaming | $/day |");
-        let _ = writeln!(s, "|----------|---------:|------------------|------:|-----------|------:|");
+        let _ = writeln!(
+            s,
+            "| workload | req tier | cached-nonstream | $/day | streaming | $/day |"
+        );
+        let _ = writeln!(
+            s,
+            "|----------|---------:|------------------|------:|-----------|------:|"
+        );
         for w in WORKLOADS {
             let a = cheapest_pass(w, Arch::CachedNonStream);
             let b = cheapest_pass(w, Arch::Streaming);
-            let _ = writeln!(s, "| {} | {:.1} | {} | {} | {} | {} |",
-                w.name, w.req_tier,
-                a.as_ref().map(|r| format!("`{}`", r.model.id)).unwrap_or("none".into()),
-                a.as_ref().map(|r| money(r.out.cost_day)).unwrap_or("-".into()),
-                b.as_ref().map(|r| format!("`{}`", r.model.id)).unwrap_or("none".into()),
-                b.as_ref().map(|r| money(r.out.cost_day)).unwrap_or("-".into()));
+            let _ = writeln!(
+                s,
+                "| {} | {:.1} | {} | {} | {} | {} |",
+                w.name,
+                w.req_tier,
+                a.as_ref()
+                    .map(|r| format!("`{}`", r.model.id))
+                    .unwrap_or("none".into()),
+                a.as_ref()
+                    .map(|r| money(r.out.cost_day))
+                    .unwrap_or("-".into()),
+                b.as_ref()
+                    .map(|r| format!("`{}`", r.model.id))
+                    .unwrap_or("none".into()),
+                b.as_ref()
+                    .map(|r| money(r.out.cost_day))
+                    .unwrap_or("-".into())
+            );
         }
     } else {
-        let _ = writeln!(s, "{:<12} {:>4}  {:<40} {:>8}  {:<40} {:>8}",
-            "workload", "req", "cached-nonstream", "$/day", "streaming", "$/day");
+        let _ = writeln!(
+            s,
+            "{:<12} {:>4}  {:<40} {:>8}  {:<40} {:>8}",
+            "workload", "req", "cached-nonstream", "$/day", "streaming", "$/day"
+        );
         for w in WORKLOADS {
             let a = cheapest_pass(w, Arch::CachedNonStream);
             let b = cheapest_pass(w, Arch::Streaming);
-            let _ = writeln!(s, "{:<12} {:>4.1}  {:<40} {:>8}  {:<40} {:>8}",
-                w.name, w.req_tier,
+            let _ = writeln!(
+                s,
+                "{:<12} {:>4.1}  {:<40} {:>8}  {:<40} {:>8}",
+                w.name,
+                w.req_tier,
                 a.as_ref().map(|r| r.model.id).unwrap_or("none"),
-                a.as_ref().map(|r| money(r.out.cost_day)).unwrap_or("-".into()),
+                a.as_ref()
+                    .map(|r| money(r.out.cost_day))
+                    .unwrap_or("-".into()),
                 b.as_ref().map(|r| r.model.id).unwrap_or("none"),
-                b.as_ref().map(|r| money(r.out.cost_day)).unwrap_or("-".into()));
+                b.as_ref()
+                    .map(|r| money(r.out.cost_day))
+                    .unwrap_or("-".into())
+            );
         }
     }
 
     // ---- head-to-head --------------------------------------------------------
-    h1(&mut s, "Head-to-head: cached-nonstream vs streaming (each workload's cheapest passer)", md);
+    h1(
+        &mut s,
+        "Head-to-head: cached-nonstream vs streaming (each workload's cheapest passer)",
+        md,
+    );
     let mut verdict_ok = true;
     let mut ratio_sum = 0.0;
     let mut stab_delta_sum = 0.0;
     if md {
-        let _ = writeln!(s, "| workload | model | $A/day | $B/day | B/A cost | stab A | stab B | stale A (need) |");
-        let _ = writeln!(s, "|----------|-------|-------:|-------:|---------:|-------:|-------:|----------------|");
+        let _ = writeln!(
+            s,
+            "| workload | model | $A/day | $B/day | B/A cost | stab A | stab B | stale A (need) |"
+        );
+        let _ = writeln!(
+            s,
+            "|----------|-------|-------:|-------:|---------:|-------:|-------:|----------------|"
+        );
     } else {
-        let _ = writeln!(s, "{:<12} {:<38} {:>8} {:>8} {:>6} {:>7} {:>7} {:>14}",
-            "workload", "model", "$A/day", "$B/day", "B/A", "stabA", "stabB", "staleA(need)");
+        let _ = writeln!(
+            s,
+            "{:<12} {:<38} {:>8} {:>8} {:>6} {:>7} {:>7} {:>14}",
+            "workload", "model", "$A/day", "$B/day", "B/A", "stabA", "stabB", "staleA(need)"
+        );
     }
     for w in WORKLOADS {
-        let Some(a) = cheapest_pass(w, Arch::CachedNonStream) else { continue };
+        let Some(a) = cheapest_pass(w, Arch::CachedNonStream) else {
+            continue;
+        };
         let b = simulate(a.model, w, Arch::Streaming);
         let ratio = b.cost_day / a.out.cost_day.max(1e-9);
         ratio_sum += ratio;
         stab_delta_sum += a.out.stability - b.stability;
-        if a.out.staleness_s > w.freshness_need_s { verdict_ok = false; }
+        if a.out.staleness_s > w.freshness_need_s {
+            verdict_ok = false;
+        }
         if md {
-            let _ = writeln!(s, "| {} | `{}` | {} | {} | {:.1}x | {:.2} | {:.2} | {:.0}s ({:.0}s) |",
-                w.name, a.model.id, money(a.out.cost_day), money(b.cost_day),
-                ratio, a.out.stability, b.stability, a.out.staleness_s, w.freshness_need_s);
+            let _ = writeln!(
+                s,
+                "| {} | `{}` | {} | {} | {:.1}x | {:.2} | {:.2} | {:.0}s ({:.0}s) |",
+                w.name,
+                a.model.id,
+                money(a.out.cost_day),
+                money(b.cost_day),
+                ratio,
+                a.out.stability,
+                b.stability,
+                a.out.staleness_s,
+                w.freshness_need_s
+            );
         } else {
-            let _ = writeln!(s, "{:<12} {:<38} {:>8} {:>8} {:>5.1}x {:>7.2} {:>7.2} {:>7.0}s ({:.0}s)",
-                w.name, a.model.id, money(a.out.cost_day), money(b.cost_day),
-                ratio, a.out.stability, b.stability, a.out.staleness_s, w.freshness_need_s);
+            let _ = writeln!(
+                s,
+                "{:<12} {:<38} {:>8} {:>8} {:>5.1}x {:>7.2} {:>7.2} {:>7.0}s ({:.0}s)",
+                w.name,
+                a.model.id,
+                money(a.out.cost_day),
+                money(b.cost_day),
+                ratio,
+                a.out.stability,
+                b.stability,
+                a.out.staleness_s,
+                w.freshness_need_s
+            );
         }
     }
     let n = WORKLOADS.len() as f64;
     let _ = writeln!(s);
-    let _ = writeln!(s, "mean cost ratio B/A: {:.1}x — mean stability delta (A-B): +{:.2}",
-        ratio_sum / n, stab_delta_sum / n);
+    let _ = writeln!(
+        s,
+        "mean cost ratio B/A: {:.1}x — mean stability delta (A-B): +{:.2}",
+        ratio_sum / n,
+        stab_delta_sum / n
+    );
 
     // ---- dynamic scaling handover ----------------------------------------------
     scaling_section(&mut s, md);
@@ -495,27 +689,57 @@ cba = 0.45*acc + 0.25*stability + 0.15*freshness + 0.15*cost (ref $0.50/day)",
     // ---- verdict + baseline ---------------------------------------------------
     h1(&mut s, "Verdict", md);
     if verdict_ok {
-        let _ = writeln!(s, "CACHED NON-STREAMING IS STABLE ENOUGH TO COMPETE — and wins on cost.");
-        let _ = writeln!(s, "Event-driven refires keep staleness under every workload's freshness");
-        let _ = writeln!(s, "need while costing {:.1}x less on average, with ~{:.2} higher display",
-            ratio_sum / n, stab_delta_sum / n);
-        let _ = writeln!(s, "stability (no token flicker, no rephrase churn). Streaming only pays");
-        let _ = writeln!(s, "when decisions must react in <{} s — agentic loops act in seconds,", STREAM_INTERVAL_S as u32);
+        let _ = writeln!(
+            s,
+            "CACHED NON-STREAMING IS STABLE ENOUGH TO COMPETE — and wins on cost."
+        );
+        let _ = writeln!(
+            s,
+            "Event-driven refires keep staleness under every workload's freshness"
+        );
+        let _ = writeln!(
+            s,
+            "need while costing {:.1}x less on average, with ~{:.2} higher display",
+            ratio_sum / n,
+            stab_delta_sum / n
+        );
+        let _ = writeln!(
+            s,
+            "stability (no token flicker, no rephrase churn). Streaming only pays"
+        );
+        let _ = writeln!(
+            s,
+            "when decisions must react in <{} s — agentic loops act in seconds,",
+            STREAM_INTERVAL_S as u32
+        );
         let _ = writeln!(s, "so they never enter that regime.");
     } else {
-        let _ = writeln!(s, "CACHED NON-STREAMING VIOLATES a freshness need — streaming required");
+        let _ = writeln!(
+            s,
+            "CACHED NON-STREAMING VIOLATES a freshness need — streaming required"
+        );
         let _ = writeln!(s, "for the flagged workloads above.");
     }
 
     h1(&mut s, "RECOMMENDED BASELINE", md);
-    if md { let _ = writeln!(s, "```"); }
-    let pick = |wi: usize| cheapest_pass(&WORKLOADS[wi], Arch::CachedNonStream)
-        .map(|r| (r.model.id, r.out.cost_day, r.out.accuracy));
-    let (single, dual, quad, octo, twelve) =
-        (pick(0), pick(1), pick(2), pick(3), pick(4));
+    if md {
+        let _ = writeln!(s, "```");
+    }
+    let pick = |wi: usize| {
+        cheapest_pass(&WORKLOADS[wi], Arch::CachedNonStream)
+            .map(|r| (r.model.id, r.out.cost_day, r.out.accuracy))
+    };
+    let (single, dual, quad, octo, twelve) = (pick(0), pick(1), pick(2), pick(3), pick(4));
     let line = |s: &mut String, what: &str, p: Option<(&str, f64, f64)>| {
         if let Some((id, cost, acc)) = p {
-            let _ = writeln!(s, "  {:<14} {:<40} (acc {:.0}, {}/day)", what, id, acc, money(cost));
+            let _ = writeln!(
+                s,
+                "  {:<14} {:<40} (acc {:.0}, {}/day)",
+                what,
+                id,
+                acc,
+                money(cost)
+            );
         } else {
             let _ = writeln!(s, "  {:<14} none pass", what);
         }
@@ -526,15 +750,41 @@ cba = 0.45*acc + 0.25*stability + 0.15*freshness + 0.15*cost (ref $0.50/day)",
     line(&mut s, "octo", octo);
     line(&mut s, "12-core", twelve);
     let _ = writeln!(s);
-    let _ = writeln!(s, "  architecture : cached-nonstream (event + 120s heartbeat), atomic swap");
-    let _ = writeln!(s, "  escalation   : move up one row when req tier exceeds the row's model");
-    let _ = writeln!(s, "  handover     : dynamic ladder 8b <-> 20b <-> 120b over the day; pays on");
-    let _ = writeln!(s, "                 octo+ devices — quad and below stay static (see above)");
-    let _ = writeln!(s, "  temperature  : 0.0 for all supervision calls (measured sweep; pv was 0.2)");
-    let _ = writeln!(s, "  pv live note : pv's own narration panel is a single-core-class task —");
-    let _ = writeln!(s, "                 llama-3.1-8b-instant stays the right default there; the");
-    let _ = writeln!(s, "                 rows above govern *agentic workflow supervision*.");
-    if md { let _ = writeln!(s, "```"); }
+    let _ = writeln!(
+        s,
+        "  architecture : cached-nonstream (event + 120s heartbeat), atomic swap"
+    );
+    let _ = writeln!(
+        s,
+        "  escalation   : move up one row when req tier exceeds the row's model"
+    );
+    let _ = writeln!(
+        s,
+        "  handover     : dynamic ladder 8b <-> 20b <-> 120b over the day; pays on"
+    );
+    let _ = writeln!(
+        s,
+        "                 octo+ devices — quad and below stay static (see above)"
+    );
+    let _ = writeln!(
+        s,
+        "  temperature  : 0.0 for all supervision calls (measured sweep; pv was 0.2)"
+    );
+    let _ = writeln!(
+        s,
+        "  pv live note : pv's own narration panel is a single-core-class task —"
+    );
+    let _ = writeln!(
+        s,
+        "                 llama-3.1-8b-instant stays the right default there; the"
+    );
+    let _ = writeln!(
+        s,
+        "                 rows above govern *agentic workflow supervision*."
+    );
+    if md {
+        let _ = writeln!(s, "```");
+    }
 
     s
 }
@@ -565,20 +815,30 @@ const SCALE_DOWN_DWELL: usize = 2;
 /// in WORKLOADS order. Pre-defined faux values.
 const DAY: [[f64; 24]; 5] = [
     // single — laptop: morning burst, afternoon focus block
-    [0.30, 0.20, 0.15, 0.10, 0.10, 0.15, 0.25, 0.40, 0.60, 0.80, 0.90, 1.00,
-     0.70, 0.55, 0.75, 0.90, 0.95, 0.80, 0.60, 0.50, 0.45, 0.40, 0.35, 0.30],
+    [
+        0.30, 0.20, 0.15, 0.10, 0.10, 0.15, 0.25, 0.40, 0.60, 0.80, 0.90, 1.00, 0.70, 0.55, 0.75,
+        0.90, 0.95, 0.80, 0.60, 0.50, 0.45, 0.40, 0.35, 0.30,
+    ],
     // dual
-    [0.35, 0.25, 0.20, 0.15, 0.15, 0.20, 0.30, 0.45, 0.65, 0.85, 0.95, 1.00,
-     0.65, 0.50, 0.80, 0.90, 1.00, 0.85, 0.65, 0.55, 0.50, 0.45, 0.40, 0.35],
+    [
+        0.35, 0.25, 0.20, 0.15, 0.15, 0.20, 0.30, 0.45, 0.65, 0.85, 0.95, 1.00, 0.65, 0.50, 0.80,
+        0.90, 1.00, 0.85, 0.65, 0.55, 0.50, 0.45, 0.40, 0.35,
+    ],
     // quad — workstation
-    [0.20, 0.15, 0.10, 0.10, 0.10, 0.15, 0.30, 0.50, 0.70, 0.90, 1.00, 0.95,
-     0.60, 0.55, 0.85, 0.95, 1.00, 0.90, 0.70, 0.55, 0.45, 0.35, 0.30, 0.25],
+    [
+        0.20, 0.15, 0.10, 0.10, 0.10, 0.15, 0.30, 0.50, 0.70, 0.90, 1.00, 0.95, 0.60, 0.55, 0.85,
+        0.95, 1.00, 0.90, 0.70, 0.55, 0.45, 0.35, 0.30, 0.25,
+    ],
     // octo — build server with CI bursts, some night jobs
-    [0.40, 0.35, 0.30, 0.30, 0.35, 0.45, 0.55, 0.65, 0.80, 0.95, 1.00, 0.90,
-     0.70, 0.60, 0.85, 1.00, 0.95, 0.80, 0.60, 0.55, 0.50, 0.50, 0.45, 0.40],
+    [
+        0.40, 0.35, 0.30, 0.30, 0.35, 0.45, 0.55, 0.65, 0.80, 0.95, 1.00, 0.90, 0.70, 0.60, 0.85,
+        1.00, 0.95, 0.80, 0.60, 0.55, 0.50, 0.50, 0.45, 0.40,
+    ],
     // 12-core — heavy workstation, deep night idle
-    [0.15, 0.10, 0.08, 0.08, 0.10, 0.15, 0.25, 0.45, 0.70, 0.90, 1.00, 0.95,
-     0.65, 0.50, 0.80, 0.95, 1.00, 0.85, 0.60, 0.45, 0.35, 0.25, 0.20, 0.15],
+    [
+        0.15, 0.10, 0.08, 0.08, 0.10, 0.15, 0.25, 0.45, 0.70, 0.90, 1.00, 0.95, 0.65, 0.50, 0.80,
+        0.95, 1.00, 0.85, 0.60, 0.45, 0.35, 0.25, 0.20, 0.15,
+    ],
 ];
 
 fn activity(dev: usize, tick: usize) -> f64 {
@@ -598,7 +858,11 @@ fn demand(w: &Workload, f: f64) -> (f64, f64, f64, f64) {
 
 /// Fleet devices keep an orchestrator-competent supervisor even at deep idle.
 fn supervisor_floor(w: &Workload) -> &'static Model {
-    let id = if w.agents >= 2 { "openai/gpt-oss-20b" } else { "llama-3.1-8b-instant" };
+    let id = if w.agents >= 2 {
+        "openai/gpt-oss-20b"
+    } else {
+        "llama-3.1-8b-instant"
+    };
     MODELS.iter().find(|m| m.id == id).unwrap()
 }
 
@@ -627,7 +891,11 @@ fn day_sim(w: &Workload, dev: usize, policy: Policy) -> DaySim {
         _ => {
             let (req0, ci0, co0, _) = demand(w, activity(dev, 0));
             let b = cheapest_passing(req0, ci0, co0).unwrap();
-            if b.tier < floor.tier { floor } else { b }
+            if b.tier < floor.tier {
+                floor
+            } else {
+                b
+            }
         }
     };
     let (mut cost, mut handovers, mut violations) = (0.0, 0, 0);
@@ -673,7 +941,11 @@ fn day_sim(w: &Workload, dev: usize, policy: Policy) -> DaySim {
         let calls = events + HEARTBEATS_HR * (1.0 - (events / HEARTBEATS_HR).min(0.8));
         cost += calls / 12.0 * call_cost(cur, ci, co);
     }
-    DaySim { cost, handovers, violations }
+    DaySim {
+        cost,
+        handovers,
+        violations,
+    }
 }
 
 /// Cheapest-passing rungs over the activity range, as (from_f, to_f, model).
@@ -715,27 +987,83 @@ struct TempRow {
 /// kimi-k2-0905 excluded: gated off the developer tier (model_not_found).
 const TEMPS: [f64; 6] = [0.0, 0.2, 0.5, 0.8, 1.0, 1.5];
 const TEMP_SWEEP: &[TempRow] = &[
-    TempRow { model: "llama-3.1-8b-instant", cells: [
-        (0.67, 1.00, 11), (0.67, 0.80, 11), (0.47, 0.67, 11),
-        (0.47, 0.60, 11), (0.53, 0.67, 11), (0.40, 0.67, 11)] },
-    TempRow { model: "meta-llama/llama-4-scout-17b-16e-instruct", cells: [
-        (1.00, 1.00, 10), (1.00, 1.00, 10), (1.00, 1.00, 10),
-        (1.00, 1.00, 10), (1.00, 1.00, 10), (0.93, 0.93, 10)] },
-    TempRow { model: "openai/gpt-oss-20b", cells: [
-        (1.00, 1.00, 156), (1.00, 1.00, 128), (1.00, 1.00, 176),
-        (1.00, 1.00, 175), (0.93, 0.93, 185), (1.00, 1.00, 183)] },
-    TempRow { model: "qwen/qwen3-32b", cells: [
-        (1.00, 1.00, 355), (0.80, 0.87, 352), (0.93, 0.93, 332),
-        (0.93, 0.93, 317), (0.87, 0.87, 349), (0.87, 0.87, 413)] },
-    TempRow { model: "qwen/qwen3.6-27b", cells: [
-        (0.67, 1.00, 720), (0.67, 1.00, 690), (0.60, 0.93, 651),
-        (0.67, 1.00, 583), (0.67, 1.00, 715), (0.27, 0.67, 500)] },
-    TempRow { model: "llama-3.3-70b-versatile", cells: [
-        (1.00, 1.00, 9), (1.00, 1.00, 9), (0.93, 0.93, 9),
-        (0.93, 0.93, 9), (0.87, 0.87, 9), (0.93, 0.93, 9)] },
-    TempRow { model: "openai/gpt-oss-120b", cells: [
-        (1.00, 1.00, 107), (1.00, 1.00, 103), (1.00, 1.00, 114),
-        (1.00, 1.00, 118), (1.00, 1.00, 118), (1.00, 1.00, 144)] },
+    TempRow {
+        model: "llama-3.1-8b-instant",
+        cells: [
+            (0.67, 1.00, 11),
+            (0.67, 0.80, 11),
+            (0.47, 0.67, 11),
+            (0.47, 0.60, 11),
+            (0.53, 0.67, 11),
+            (0.40, 0.67, 11),
+        ],
+    },
+    TempRow {
+        model: "meta-llama/llama-4-scout-17b-16e-instruct",
+        cells: [
+            (1.00, 1.00, 10),
+            (1.00, 1.00, 10),
+            (1.00, 1.00, 10),
+            (1.00, 1.00, 10),
+            (1.00, 1.00, 10),
+            (0.93, 0.93, 10),
+        ],
+    },
+    TempRow {
+        model: "openai/gpt-oss-20b",
+        cells: [
+            (1.00, 1.00, 156),
+            (1.00, 1.00, 128),
+            (1.00, 1.00, 176),
+            (1.00, 1.00, 175),
+            (0.93, 0.93, 185),
+            (1.00, 1.00, 183),
+        ],
+    },
+    TempRow {
+        model: "qwen/qwen3-32b",
+        cells: [
+            (1.00, 1.00, 355),
+            (0.80, 0.87, 352),
+            (0.93, 0.93, 332),
+            (0.93, 0.93, 317),
+            (0.87, 0.87, 349),
+            (0.87, 0.87, 413),
+        ],
+    },
+    TempRow {
+        model: "qwen/qwen3.6-27b",
+        cells: [
+            (0.67, 1.00, 720),
+            (0.67, 1.00, 690),
+            (0.60, 0.93, 651),
+            (0.67, 1.00, 583),
+            (0.67, 1.00, 715),
+            (0.27, 0.67, 500),
+        ],
+    },
+    TempRow {
+        model: "llama-3.3-70b-versatile",
+        cells: [
+            (1.00, 1.00, 9),
+            (1.00, 1.00, 9),
+            (0.93, 0.93, 9),
+            (0.93, 0.93, 9),
+            (0.87, 0.87, 9),
+            (0.93, 0.93, 9),
+        ],
+    },
+    TempRow {
+        model: "openai/gpt-oss-120b",
+        cells: [
+            (1.00, 1.00, 107),
+            (1.00, 1.00, 103),
+            (1.00, 1.00, 114),
+            (1.00, 1.00, 118),
+            (1.00, 1.00, 118),
+            (1.00, 1.00, 144),
+        ],
+    },
 ];
 
 /// First argmax of pass*agree — ties resolve to the lowest temperature.
@@ -797,7 +1125,14 @@ fn scan_answers(text: &str, at: usize) -> Option<Vec<String>> {
     let open = rest.find('[')?;
     let inner = rest.get(open + 1..)?;
     let inner = inner.get(..inner.find(']')?)?;
-    Some(inner.split('"').skip(1).step_by(2).map(str::to_string).collect())
+    Some(
+        inner
+            .split('"')
+            .skip(1)
+            .step_by(2)
+            .map(str::to_string)
+            .collect(),
+    )
 }
 
 /// (pass fraction, agreement) of one (model, temp) cell: 3 probes in artifact
@@ -827,7 +1162,10 @@ fn measured_cell(ttext: &str) -> Option<(f64, f64)> {
     if total == 0 {
         return None;
     }
-    Some((passes as f64 / total as f64, shares.iter().sum::<f64>() / shares.len() as f64))
+    Some((
+        passes as f64 / total as f64,
+        shares.iter().sum::<f64>() / shares.len() as f64,
+    ))
 }
 
 /// Recompute every TEMP_SWEEP cell from the measured artifact and require
@@ -839,7 +1177,10 @@ fn temp_artifact_check() -> Result<(), String> {
     for row in TEMP_SWEEP {
         let mkey = format!("\"{}\"", row.model);
         let mstart = scan_from(&text, &mkey, 0).ok_or_else(|| {
-            format!("temperature artifact: model {} missing from {PATH}", row.model)
+            format!(
+                "temperature artifact: model {} missing from {PATH}",
+                row.model
+            )
         })?;
         // the model's section ends where the next model key begins
         let mend = TEMP_SWEEP
@@ -847,19 +1188,22 @@ fn temp_artifact_check() -> Result<(), String> {
             .filter_map(|r| scan_from(&text, &format!("\"{}\"", r.model), mstart + mkey.len()))
             .min()
             .unwrap_or(text.len());
-        let mtext = text.get(mstart..mend).ok_or("temperature artifact: bad slice")?;
+        let mtext = text
+            .get(mstart..mend)
+            .ok_or("temperature artifact: bad slice")?;
         for (ti, temp) in TEMPS.iter().enumerate() {
             // Python str(float) == Rust {:?} here: "0.0", "0.2", "1.0", ...
             let tkey = format!("\"{temp:?}\":");
-            let tstart = scan_from(mtext, &tkey, 0).ok_or_else(|| {
-                format!("temperature artifact: {} @ {temp:?} missing", row.model)
-            })?;
+            let tstart = scan_from(mtext, &tkey, 0)
+                .ok_or_else(|| format!("temperature artifact: {} @ {temp:?} missing", row.model))?;
             let tend = TEMPS[ti + 1..]
                 .iter()
                 .filter_map(|t| scan_from(mtext, &format!("\"{t:?}\":"), tstart + tkey.len()))
                 .min()
                 .unwrap_or(mtext.len());
-            let ttext = mtext.get(tstart..tend).ok_or("temperature artifact: bad slice")?;
+            let ttext = mtext
+                .get(tstart..tend)
+                .ok_or("temperature artifact: bad slice")?;
             let (got_pass, got_agree) = measured_cell(ttext).ok_or_else(|| {
                 format!("temperature artifact: {} @ {temp:?} unparsable", row.model)
             })?;
@@ -882,36 +1226,86 @@ fn temp_artifact_check() -> Result<(), String> {
 }
 
 fn temp_section(s: &mut String, md: bool) {
-    h1(s, "Inference temperature (measured — 630 real API calls, 2026-07-15)", md);
-    let _ = writeln!(s, "3 deterministically-graded supervisor probes (JSON action emission, enum");
-    let _ = writeln!(s, "action selection, capacity arithmetic) x 5 identical reps x 6 temperatures.");
-    let _ = writeln!(s, "pass = correctness vs exact rules, agree = self-agreement across reps.");
-    let _ = writeln!(s, "kimi-k2-0905 excluded: gated off the developer tier (model_not_found).");
-    let _ = writeln!(s, "caveats: n=5 reps per cell gives pass a resolution of ~0.07; trials were");
-    let _ = writeln!(s, "interleaved round-robin across temperatures; argmax selection overstates");
-    let _ = writeln!(s, "certainty, so ties resolve toward the lower temperature.\n");
+    h1(
+        s,
+        "Inference temperature (measured — 630 real API calls, 2026-07-15)",
+        md,
+    );
+    let _ = writeln!(
+        s,
+        "3 deterministically-graded supervisor probes (JSON action emission, enum"
+    );
+    let _ = writeln!(
+        s,
+        "action selection, capacity arithmetic) x 5 identical reps x 6 temperatures."
+    );
+    let _ = writeln!(
+        s,
+        "pass = correctness vs exact rules, agree = self-agreement across reps."
+    );
+    let _ = writeln!(
+        s,
+        "kimi-k2-0905 excluded: gated off the developer tier (model_not_found)."
+    );
+    let _ = writeln!(
+        s,
+        "caveats: n=5 reps per cell gives pass a resolution of ~0.07; trials were"
+    );
+    let _ = writeln!(
+        s,
+        "interleaved round-robin across temperatures; argmax selection overstates"
+    );
+    let _ = writeln!(
+        s,
+        "certainty, so ties resolve toward the lower temperature.\n"
+    );
 
     if md {
-        let _ = writeln!(s, "| model | 0.0 | 0.2 | 0.5 | 0.8 | 1.0 | 1.5 | ideal | safe ≤ | tok/call |");
-        let _ = writeln!(s, "|-------|----:|----:|----:|----:|----:|----:|------:|-------:|---------:|");
+        let _ = writeln!(
+            s,
+            "| model | 0.0 | 0.2 | 0.5 | 0.8 | 1.0 | 1.5 | ideal | safe ≤ | tok/call |"
+        );
+        let _ = writeln!(
+            s,
+            "|-------|----:|----:|----:|----:|----:|----:|------:|-------:|---------:|"
+        );
     } else {
-        let _ = writeln!(s, "  {:<40} {:>28} {:>6} {:>6} {:>6}",
-            "model", "pass @ 0.0/0.2/0.5/0.8/1.0/1.5", "ideal", "safe<=", "tok");
+        let _ = writeln!(
+            s,
+            "  {:<40} {:>28} {:>6} {:>6} {:>6}",
+            "model", "pass @ 0.0/0.2/0.5/0.8/1.0/1.5", "ideal", "safe<=", "tok"
+        );
     }
     for row in TEMP_SWEEP {
         let bi = ideal_idx(row);
         let passes: Vec<String> = row.cells.iter().map(|c| format!("{:.2}", c.0)).collect();
         if md {
-            let _ = writeln!(s, "| `{}` | {} | **{:.1}** | {:.1} | {} |",
-                row.model, passes.join(" | "), TEMPS[bi], safe_max_temp(row), row.cells[bi].2);
+            let _ = writeln!(
+                s,
+                "| `{}` | {} | **{:.1}** | {:.1} | {} |",
+                row.model,
+                passes.join(" | "),
+                TEMPS[bi],
+                safe_max_temp(row),
+                row.cells[bi].2
+            );
         } else {
-            let _ = writeln!(s, "  {:<40} {:>28} {:>6.1} {:>6.1} {:>6}",
-                row.model, passes.join(" "), TEMPS[bi], safe_max_temp(row), row.cells[bi].2);
+            let _ = writeln!(
+                s,
+                "  {:<40} {:>28} {:>6.1} {:>6.1} {:>6}",
+                row.model,
+                passes.join(" "),
+                TEMPS[bi],
+                safe_max_temp(row),
+                row.cells[bi].2
+            );
         }
     }
 
     h2(s, "Findings", md);
-    code(s, "1. temp 0.0 is ideal for EVERY measured model — no model gained\n\
+    code(
+        s,
+        "1. temp 0.0 is ideal for EVERY measured model — no model gained\n\
              \x20   anything from temperature; agreement is the first casualty\n\
 2. pv's old 0.2 default was harmless for strong models but already cost\n\
              \x20   8b-instant 20% agreement — pv now calls at temperature 0.0\n\
@@ -925,7 +1319,9 @@ fn temp_section(s: &mut String, md: bool) {
              \x20   break a strong one\n\
 6. per-model safe ceilings: 120b eats anything (<=1.5); scout <=1.0;\n\
              \x20   gpt-oss-20b <=0.8; 70b <=0.2; 8b, qwen3-32b, qwen3.6\n\
-             \x20   need 0.0 (or near it) to stay reliable", md);
+             \x20   need 0.0 (or near it) to stay reliable",
+        md,
+    );
     let _ = writeln!(s);
 }
 
@@ -944,10 +1340,20 @@ fn nick(m: &Model) -> &'static str {
 }
 
 fn scaling_section(s: &mut String, md: bool) {
-    h1(s, "Dynamic scaling handover — cheaper models when cores idle", md);
-    let _ = writeln!(s, "24 h synthetic activity curves (anchors + {:.0}% 3 h-wobble), 5-min ticks,",
-        WOBBLE * 100.0);
-    let _ = writeln!(s, "arch-A call model; demand interpolated between single-core and device peak.\n");
+    h1(
+        s,
+        "Dynamic scaling handover — cheaper models when cores idle",
+        md,
+    );
+    let _ = writeln!(
+        s,
+        "24 h synthetic activity curves (anchors + {:.0}% 3 h-wobble), 5-min ticks,",
+        WOBBLE * 100.0
+    );
+    let _ = writeln!(
+        s,
+        "arch-A call model; demand interpolated between single-core and device peak.\n"
+    );
 
     h2(s, "Model ladder per device (handover thresholds)", md);
     if md {
@@ -967,9 +1373,21 @@ fn scaling_section(s: &mut String, md: bool) {
             }
         }
         if md {
-            let _ = writeln!(s, "| {} | {:.1} | {} |", w.name, w.req_tier, parts.join(" → "));
+            let _ = writeln!(
+                s,
+                "| {} | {:.1} | {} |",
+                w.name,
+                w.req_tier,
+                parts.join(" → ")
+            );
         } else {
-            let _ = writeln!(s, "  {:<12} peak req {:.1}   {}", w.name, w.req_tier, parts.join(" → "));
+            let _ = writeln!(
+                s,
+                "  {:<12} peak req {:.1}   {}",
+                w.name,
+                w.req_tier,
+                parts.join(" → ")
+            );
         }
     }
     let _ = writeln!(s);
@@ -979,8 +1397,11 @@ fn scaling_section(s: &mut String, md: bool) {
         let _ = writeln!(s, "| device | static $/day | naive $/day (handovers) | hysteresis $/day (handovers) | saved | floor violations |");
         let _ = writeln!(s, "|--------|-------------:|------------------------:|-----------------------------:|------:|-----------------:|");
     } else {
-        let _ = writeln!(s, "  {:<12} {:>9} {:>16} {:>20} {:>7} {:>8}",
-            "device", "static$", "naive$ (hd)", "hyst$ (hd)", "saved", "viols");
+        let _ = writeln!(
+            s,
+            "  {:<12} {:>9} {:>16} {:>20} {:>7} {:>8}",
+            "device", "static$", "naive$ (hd)", "hyst$ (hd)", "saved", "viols"
+        );
     }
     let (mut sum_static, mut sum_hyst) = (0.0, 0.0);
     for (i, w) in WORKLOADS.iter().enumerate() {
@@ -991,22 +1412,43 @@ fn scaling_section(s: &mut String, md: bool) {
         sum_hyst += hy.cost;
         let saved = (1.0 - hy.cost / st.cost) * 100.0;
         if md {
-            let _ = writeln!(s, "| {} | {} | {} ({}) | {} ({}) | {:.0}% | {} |",
-                w.name, money(st.cost), money(na.cost), na.handovers,
-                money(hy.cost), hy.handovers, saved, hy.violations);
+            let _ = writeln!(
+                s,
+                "| {} | {} | {} ({}) | {} ({}) | {:.0}% | {} |",
+                w.name,
+                money(st.cost),
+                money(na.cost),
+                na.handovers,
+                money(hy.cost),
+                hy.handovers,
+                saved,
+                hy.violations
+            );
         } else {
-            let _ = writeln!(s, "  {:<12} {:>9} {:>16} {:>20} {:>6.0}% {:>8}",
-                w.name, money(st.cost),
+            let _ = writeln!(
+                s,
+                "  {:<12} {:>9} {:>16} {:>20} {:>6.0}% {:>8}",
+                w.name,
+                money(st.cost),
                 format!("{} ({})", money(na.cost), na.handovers),
                 format!("{} ({})", money(hy.cost), hy.handovers),
-                saved, hy.violations);
+                saved,
+                hy.violations
+            );
         }
     }
-    let _ = writeln!(s, "\n  total: static {}/day → hysteresis {}/day ({:.0}% saved)",
-        money(sum_static), money(sum_hyst), (1.0 - sum_hyst / sum_static) * 100.0);
+    let _ = writeln!(
+        s,
+        "\n  total: static {}/day → hysteresis {}/day ({:.0}% saved)",
+        money(sum_static),
+        money(sum_hyst),
+        (1.0 - sum_hyst / sum_static) * 100.0
+    );
 
     h2(s, "Handover strategy", md);
-    code(s, "1. rungs        8b-instant (single-agent idle) -> gpt-oss-20b (fleet\n\
+    code(
+        s,
+        "1. rungs        8b-instant (single-agent idle) -> gpt-oss-20b (fleet\n\
              \x20               floor) -> gpt-oss-120b (fleet peak); kimi-k2 premium only\n\
 2. scale UP     the tick the accuracy floor would breach — under-tier\n\
              \x20   advice is worse than none; never wait\n\
@@ -1024,7 +1466,9 @@ fn scaling_section(s: &mut String, md: bool) {
 8. where it pays octo+ devices (peak req tier >= 3.5); octo gains most —\n\
              \x20   on 12-core the peak hours dominate spend, so savings are\n\
              \x20   real but smaller. quad and below already bottom out on\n\
-             \x20   the cheap rung — stay static", md);
+             \x20   the cheap rung — stay static",
+        md,
+    );
     let _ = writeln!(s);
 }
 
@@ -1035,18 +1479,30 @@ fn check() -> Result<(), String> {
             .ok_or_else(|| format!("{}: no cached-nonstream model passes", w.name))?;
         let b = simulate(a.model, w, Arch::Streaming);
         if b.cost_day <= a.out.cost_day {
-            return Err(format!("{}: streaming not more expensive — sim bug", w.name));
+            return Err(format!(
+                "{}: streaming not more expensive — sim bug",
+                w.name
+            ));
         }
         if a.out.staleness_s > w.freshness_need_s {
-            return Err(format!("{}: cached staleness violates freshness need", w.name));
+            return Err(format!(
+                "{}: cached staleness violates freshness need",
+                w.name
+            ));
         }
         if a.out.accuracy < req_accuracy(w) {
             return Err(format!("{}: cached recommendation below threshold", w.name));
         }
     }
     // the cliff must actually require bigger models somewhere
-    let t1 = cheapest_pass(&WORKLOADS[0], Arch::CachedNonStream).unwrap().model.tier;
-    let t5 = cheapest_pass(&WORKLOADS[4], Arch::CachedNonStream).unwrap().model.tier;
+    let t1 = cheapest_pass(&WORKLOADS[0], Arch::CachedNonStream)
+        .unwrap()
+        .model
+        .tier;
+    let t5 = cheapest_pass(&WORKLOADS[4], Arch::CachedNonStream)
+        .unwrap()
+        .model
+        .tier;
     if t5 <= t1 {
         return Err("no tier escalation between single and 12-core".into());
     }
@@ -1098,12 +1554,18 @@ fn check() -> Result<(), String> {
         }
         let bi = ideal_idx(row);
         if TEMPS[bi] > 0.2 {
-            return Err(format!("{}: ideal temp above 0.2 — supervision claim broken", row.model));
+            return Err(format!(
+                "{}: ideal temp above 0.2 — supervision claim broken",
+                row.model
+            ));
         }
         let ideal = row.cells[bi].0 * row.cells[bi].1;
         let hot = row.cells[5].0 * row.cells[5].1;
         if ideal < hot {
-            return Err(format!("{}: scores better at 1.5 than at ideal — sweep noise?", row.model));
+            return Err(format!(
+                "{}: scores better at 1.5 than at ideal — sweep noise?",
+                row.model
+            ));
         }
         if row.cells[bi].0 >= 0.9 {
             strong += 1;

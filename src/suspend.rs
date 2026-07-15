@@ -49,8 +49,10 @@ pub fn load_suspended() -> Vec<SuspendedApp> {
 
 fn save_suspended(v: &[SuspendedApp]) -> std::io::Result<()> {
     fs::create_dir_all(state_dir())?;
-    let body = toml::to_string_pretty(&SuspendedFile { suspended: v.to_vec() })
-        .map_err(std::io::Error::other)?;
+    let body = toml::to_string_pretty(&SuspendedFile {
+        suspended: v.to_vec(),
+    })
+    .map_err(std::io::Error::other)?;
     fs::write(state_file(), body)?;
     Ok(())
 }
@@ -119,7 +121,13 @@ fn thaw(pids: &[u32], starts: &[PidStart]) -> usize {
 }
 
 /// Freeze all pids of an app and record it. Returns the recorded entry.
-pub fn suspend(key: &str, display: &str, pids: &[u32], rss_kb: u64, task: &str) -> Result<SuspendedApp, String> {
+pub fn suspend(
+    key: &str,
+    display: &str,
+    pids: &[u32],
+    rss_kb: u64,
+    task: &str,
+) -> Result<SuspendedApp, String> {
     if pids.is_empty() {
         return Err("no processes matched".into());
     }
@@ -195,7 +203,11 @@ pub fn kill_suspended(key: &str) -> Result<usize, String> {
 /// Drop records whose pids have all vanished.
 pub fn gc() {
     let mut all = load_suspended();
-    all.retain(|s| s.pids.iter().any(|p| PathBuf::from(format!("/proc/{p}")).exists()));
+    all.retain(|s| {
+        s.pids
+            .iter()
+            .any(|p| PathBuf::from(format!("/proc/{p}")).exists())
+    });
     let _ = save_suspended(&all);
 }
 
@@ -260,7 +272,16 @@ mod tests {
         assert!(signal(pid, SIGSTOP));
         assert!(wait_state(pid, 'T'));
         // wrong recorded start (as if recycled) — must stay frozen and unsignaled
-        assert_eq!(thaw(&[pid], &[PidStart { pid, start: start.wrapping_add(1) }]), 0);
+        assert_eq!(
+            thaw(
+                &[pid],
+                &[PidStart {
+                    pid,
+                    start: start.wrapping_add(1)
+                }]
+            ),
+            0
+        );
         assert_eq!(proc_state(pid), Some('T'));
         // correct identity — thawed (this is also the suspend rollback path)
         assert_eq!(thaw(&[pid], &[PidStart { pid, start }]), 1);
@@ -295,9 +316,15 @@ task = "browsing"
             rss_kb: 102400,
             suspended_at: 1_700_000_000,
             task: "browsing".into(),
-            starts: vec![PidStart { pid: 1234, start: 987_654_321 }],
+            starts: vec![PidStart {
+                pid: 1234,
+                start: 987_654_321,
+            }],
         };
-        let body = toml::to_string_pretty(&SuspendedFile { suspended: vec![app.clone()] }).unwrap();
+        let body = toml::to_string_pretty(&SuspendedFile {
+            suspended: vec![app.clone()],
+        })
+        .unwrap();
         let back: SuspendedFile = toml::from_str(&body).unwrap();
         assert_eq!(back.suspended[0].starts, app.starts);
     }
