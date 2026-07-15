@@ -9,7 +9,8 @@ use crate::display::Theme;
 use crate::groq::extract_field;
 
 pub const DEFAULT_REPO: &str = "elci-group/pv";
-pub const ASSET_NAME: &str = "pv-linux-x86_64";
+// Release assets ship as a single binary named `pv-linux-x86_64`; the
+// updater downloads the release's first asset.
 
 #[derive(Debug, Clone)]
 pub struct Options {
