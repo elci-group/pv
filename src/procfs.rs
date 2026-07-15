@@ -10,16 +10,21 @@ use std::sync::OnceLock;
 pub fn ticks_per_sec() -> f64 {
     static TPS: OnceLock<f64> = OnceLock::new();
     *TPS.get_or_init(|| {
-        std::process::Command::new("getconf")
+        let out = std::process::Command::new("getconf")
             .arg("CLK_TCK")
             .output()
             .ok()
             .filter(|o| o.status.success())
-            .and_then(|o| String::from_utf8(o.stdout).ok())
-            .and_then(|s| s.trim().parse::<f64>().ok())
-            .filter(|&v| v > 0.0)
-            .unwrap_or(100.0)
+            .and_then(|o| String::from_utf8(o.stdout).ok());
+        clk_tck_from_output(out.as_deref())
     })
+}
+
+/// Parse `getconf CLK_TCK` output; fall back to 100.0 on anything unusable.
+fn clk_tck_from_output(out: Option<&str>) -> f64 {
+    out.and_then(|s| s.trim().parse::<f64>().ok())
+        .filter(|&v| v > 0.0)
+        .unwrap_or(100.0)
 }
 
 #[derive(Debug, Clone)]

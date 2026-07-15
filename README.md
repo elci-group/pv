@@ -229,7 +229,7 @@ unverified binary.
 
 `pv notify` emits one-shot valve cards for the current state; `pv daemon`
 watches continuously. The daemon learns your **habits** (per-hour demand
-profile, persisted to `~/.local/share/pv/habits.json`), tracks **variance**
+profile, persisted to `~/.local/share/pv/habits.toml`), tracks **variance**
 in resource demand over a sliding window, and vents notifications when
 current or *likely* bottlenecks form — each as a rustic valve card with one
 concrete action:
