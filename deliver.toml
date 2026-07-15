@@ -77,6 +77,19 @@ expect_exit = 0
 timeout_secs = 300
 
 [[command]]
+name = "unit tests"
+cmd = ["cargo", "test"]
+expect_exit = 0
+timeout_secs = 300
+stdout_contains = ["test result: ok"]
+
+[[command]]
+name = "smoke: live help"
+cmd = ["./target/release/pv", "live", "--help"]
+expect_exit = 0
+stdout_contains = ["Groq"]
+
+[[command]]
 name = "smoke: intent recognition"
 cmd = ["./target/release/pv", "intent", "cargo", "build"]
 expect_exit = 0
