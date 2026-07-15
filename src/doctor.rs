@@ -1,0 +1,142 @@
+//! `pv doctor` — preflight: the external tools and config pv relies on.
+//!
+//! pv keeps its crate dependencies tiny (clap/serde/toml) by shelling out
+//! to standard Unix tools; doctor verifies the environment provides them
+//! and reports which optional features go dark when a tool is absent.
+
+use crate::display::Theme;
+
+struct Probe {
+    tool: &'static str,
+    required: bool,
+    used_for: &'static str,
+}
+
+const PROBES: &[Probe] = &[
+    Probe { tool: "curl",        required: true,  used_for: "Groq inference, pv update" },
+    Probe { tool: "sha256sum",   required: true,  used_for: "update checksum verification" },
+    Probe { tool: "ssh",         required: false, used_for: "pv migrate, pv run --remote" },
+    Probe { tool: "rsync",       required: false, used_for: "pv migrate file copy" },
+    Probe { tool: "git",         required: false, used_for: "pv update --source" },
+    Probe { tool: "cargo",       required: false, used_for: "pv update --source" },
+    Probe { tool: "notify-send", required: false, used_for: "desktop valve notifications" },
+    Probe { tool: "getconf",     required: false, used_for: "precise CPU tick rate" },
+    Probe { tool: "renice",      required: false, used_for: "policy throttle actions" },
+    Probe { tool: "ionice",      required: false, used_for: "policy throttle actions" },
+    Probe { tool: "stty",        required: false, used_for: "pv live terminal size" },
+];
+
+/// True when `tool` resolves to an executable regular file on $PATH.
+pub fn on_path(tool: &str) -> bool {
+    let Some(paths) = std::env::var_os("PATH") else {
+        return false;
+    };
+    use std::os::unix::fs::PermissionsExt;
+    std::env::split_paths(&paths).any(|dir| {
+        std::fs::metadata(dir.join(tool))
+            .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false)
+    })
+}
+
+fn config_exists(rel: &str) -> bool {
+    crate::procfs::xdg("XDG_CONFIG_HOME", ".config")
+        .join("pv")
+        .join(rel)
+        .exists()
+}
+
+pub fn run(t: &Theme) -> i32 {
+    println!("{}", t.section("pv doctor — environment preflight"));
+    let mut missing_required = 0;
+    let mut missing_optional = 0;
+    for p in PROBES {
+        let ok = on_path(p.tool);
+        if !ok && p.required {
+            missing_required += 1;
+        } else if !ok {
+            missing_optional += 1;
+        }
+        let mark = if ok {
+            t.green("✓")
+        } else if p.required {
+            t.red("✗ REQUIRED")
+        } else {
+            t.yellow("· missing")
+        };
+        let need = if p.required { "core" } else { "opt " };
+        println!(
+            " {:<12} {}  {}  {}",
+            p.tool,
+            mark,
+            t.dim(need),
+            t.dim(p.used_for)
+        );
+    }
+
+    println!();
+    println!("{}", t.section("configuration"));
+    let groq = crate::groq::api_key().is_some();
+    println!(
+        " {:<12} {}  {}",
+        "groq key",
+        if groq { t.green("✓") } else { t.yellow("· not set") },
+        t.dim("inference ($GROQ_API_KEY or ~/.config/pv/groq_api_key)")
+    );
+    for (file, what) in [
+        ("hosts.toml", "pv migrate targets"),
+        ("policies.toml", "custom pressure policies"),
+    ] {
+        let ok = config_exists(file);
+        println!(
+            " {:<12} {}  {}",
+            file,
+            if ok { t.green("✓") } else { t.dim("· not created") },
+            t.dim(what)
+        );
+    }
+
+    println!();
+    if missing_required > 0 {
+        println!(
+            "{}",
+            t.red(&format!(
+                "{missing_required} required tool(s) missing — inference and update will fail"
+            ))
+        );
+        1
+    } else if missing_optional > 0 {
+        println!(
+            "{}",
+            t.yellow(&format!(
+                "core ready; {missing_optional} optional tool(s) missing (features above degrade gracefully)"
+            ))
+        );
+        0
+    } else {
+        println!("{}", t.green("all systems nominal — valve seated"));
+        0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn finds_shell_on_path() {
+        assert!(on_path("sh"));
+    }
+
+    #[test]
+    fn missing_tool_is_absent() {
+        assert!(!on_path("pv-definitely-not-a-real-tool-9f3k"));
+    }
+
+    #[test]
+    fn probes_cover_every_required_tool() {
+        // required probes must stay aligned with net.rs / update.rs usage
+        assert!(PROBES.iter().any(|p| p.tool == "curl" && p.required));
+        assert!(PROBES.iter().any(|p| p.tool == "sha256sum" && p.required));
+    }
+}

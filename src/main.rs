@@ -3,6 +3,7 @@
 mod commands;
 mod daemon;
 mod display;
+mod doctor;
 mod groq;
 mod intent;
 mod live;
@@ -141,8 +142,7 @@ enum Cmd {
         no_infer: bool,
     },
     /// Update pv: latest GitHub release binary, or clone+build from source
-    Update {
-        /// Force source build instead of release download
+    Update {        /// Force source build instead of release download
         #[arg(long)]
         source: bool,
         /// Install to /usr/local/bin (via sudo) instead of ~/.local/bin
