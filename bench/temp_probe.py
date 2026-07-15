@@ -58,11 +58,13 @@ def grade_json(text):
         return "parse-fail", False
     action = str(obj.get("action", "")).lower()
     app = str(obj.get("app", "")).lower()
+    gb_raw = obj.get("gb", 0)
     try:
-        gb = float(obj.get("gb", 0))
+        gb = float(gb_raw)
     except Exception:
-        gb = 0.0
-    ok = action in ("suspend", "freeze") and "firefox" in app and 1.0 <= gb <= 1.6
+        num = re.search(r"\d+(?:\.\d+)?", str(gb_raw))
+        gb = float(num.group(0)) if num else 0.0
+    ok = action == "suspend" and "firefox" in app and 1.0 <= gb <= 1.6
     return action or "empty", ok
 
 
@@ -86,7 +88,9 @@ PROBES = [
         "grade": grade_json,
         "system": "You are pv, a process supervisor. Reply with a single JSON object and nothing else.",
         "user": "Firefox has been idle 17 minutes and holds 1.3 GB. RAM is 81% committed. "
-                "Emit exactly: {\"action\": ..., \"app\": ..., \"gb\": ...} describing the best action.",
+                "Choose one action from: suspend, kill, throttle, migrate "
+                "(suspend reclaims memory while preserving state). "
+                "Emit exactly: {\"action\": ..., \"app\": ..., \"gb\": ...} for the best action.",
     },
     {
         "id": "action",
