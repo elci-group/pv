@@ -1664,7 +1664,10 @@ mod tests {
         close(req_accuracy_tier(3.5), 60.0);
         close(req_accuracy_tier(4.0), 64.0);
         // linear: a one-tier step always adds PASS_PER_TIER
-        close(req_accuracy_tier(2.7) - req_accuracy_tier(1.7), PASS_PER_TIER);
+        close(
+            req_accuracy_tier(2.7) - req_accuracy_tier(1.7),
+            PASS_PER_TIER,
+        );
     }
 
     #[test]
