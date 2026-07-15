@@ -141,6 +141,24 @@ on a 120 s heartbeat — never on a fixed hot loop. The default model,
 `llama-3.1-8b-instant`, is fast and cheap but editorializes; the 70B model
 follows the snapshot much more faithfully.
 
+### `pv update` — self-update
+
+```sh
+pv update            # latest GitHub release binary → ~/.local/bin/pv
+pv update --source   # clone main, cargo build --release, install
+pv update --system   # install to /usr/local/bin via sudo
+pv update --check    # report versions only, change nothing
+pv update --force    # reinstall even when current == latest
+```
+
+Resolution order: latest release asset from GitHub (public API, no auth);
+when the repo has no releases yet, it falls back to a source build
+(`git clone --depth 1` → `cargo build --release` → install). The install
+target is `~/.local/bin` by default — or `/usr/local/bin` when `--system` is
+given or pv already runs from there. The swap is atomic (rename), so
+updating a running pv is safe. Releases ship a single asset named
+`pv-linux-x86_64`.
+
 ### `pv daemon` / `pv notify` — the valve board
 
 `pv notify` emits one-shot valve cards for the current state; `pv daemon`
