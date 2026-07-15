@@ -75,6 +75,18 @@ forbid_regex = ["TODO", "FIXME", "unimplemented!"]
 path = "README.md"
 required = true
 
+[[file]]
+path = "LICENSE"
+required = true
+
+[[file]]
+path = "docs/logo.svg"
+required = true
+
+[[file]]
+path = "docs/pv.1"
+required = true
+
 [[command]]
 name = "release build"
 cmd = ["cargo", "build", "--release"]
