@@ -531,6 +531,254 @@ cba = 0.45*acc + 0.25*stability + 0.15*freshness + 0.15*cost (ref $0.50/day)",
 }
 
 // ---------------------------------------------------------------------------
+// Dynamic scaling handover
+// ---------------------------------------------------------------------------
+//
+// A device sized for peak load should not pay peak-model prices at idle.
+// Demand is modelled as a 24 h activity curve (fraction of cores busy) plus a
+// deterministic 3 h wobble, sampled in 5-minute ticks. Three policies:
+//
+//   static      — one model, sized for the device's peak (today's behaviour)
+//   naive       — re-pick the cheapest passing rung every tick
+//   hysteresis  — scale UP immediately on an accuracy-floor breach, scale
+//                 DOWN only after the cheaper rung holds for 2 ticks, and
+//                 never below the supervisor floor (fleet devices keep an
+//                 orchestrator-competent model even at deep idle)
+
+/// 5-minute supervision ticks per simulated day.
+const TICKS_PER_DAY: usize = 288;
+/// Deterministic intra-hour demand wobble — creates realistic threshold crossings.
+const WOBBLE: f64 = 0.15;
+/// Ticks a cheaper rung must hold before a scale-down handover commits.
+const SCALE_DOWN_DWELL: usize = 2;
+
+/// 24 h activity anchors (fraction of cores busy), one row per workload,
+/// in WORKLOADS order. Pre-defined faux values.
+const DAY: [[f64; 24]; 5] = [
+    // single — laptop: morning burst, afternoon focus block
+    [0.30, 0.20, 0.15, 0.10, 0.10, 0.15, 0.25, 0.40, 0.60, 0.80, 0.90, 1.00,
+     0.70, 0.55, 0.75, 0.90, 0.95, 0.80, 0.60, 0.50, 0.45, 0.40, 0.35, 0.30],
+    // dual
+    [0.35, 0.25, 0.20, 0.15, 0.15, 0.20, 0.30, 0.45, 0.65, 0.85, 0.95, 1.00,
+     0.65, 0.50, 0.80, 0.90, 1.00, 0.85, 0.65, 0.55, 0.50, 0.45, 0.40, 0.35],
+    // quad — workstation
+    [0.20, 0.15, 0.10, 0.10, 0.10, 0.15, 0.30, 0.50, 0.70, 0.90, 1.00, 0.95,
+     0.60, 0.55, 0.85, 0.95, 1.00, 0.90, 0.70, 0.55, 0.45, 0.35, 0.30, 0.25],
+    // octo — build server with CI bursts, some night jobs
+    [0.40, 0.35, 0.30, 0.30, 0.35, 0.45, 0.55, 0.65, 0.80, 0.95, 1.00, 0.90,
+     0.70, 0.60, 0.85, 1.00, 0.95, 0.80, 0.60, 0.55, 0.50, 0.50, 0.45, 0.40],
+    // 12-core — heavy workstation, deep night idle
+    [0.15, 0.10, 0.08, 0.08, 0.10, 0.15, 0.25, 0.45, 0.70, 0.90, 1.00, 0.95,
+     0.65, 0.50, 0.80, 0.95, 1.00, 0.85, 0.60, 0.45, 0.35, 0.25, 0.20, 0.15],
+];
+
+fn activity(dev: usize, tick: usize) -> f64 {
+    let wobble = 1.0 + WOBBLE * (2.0 * std::f64::consts::PI * tick as f64 / 36.0).sin();
+    (DAY[dev][tick / 12] * wobble).clamp(0.02, 1.0)
+}
+
+/// Effective demand at activity fraction f: (req_tier, ctx_in, ctx_out, events/hr).
+/// Requirement tier scales sublinearly — even a partial fleet needs coordination.
+fn demand(w: &Workload, f: f64) -> (f64, f64, f64, f64) {
+    let req = 1.0 + (w.req_tier - 1.0) * f.powf(0.7);
+    let ctx_in = 1800.0 + (w.ctx_in as f64 - 1800.0) * f;
+    let ctx_out = 220.0 + (w.ctx_out as f64 - 220.0) * f;
+    let events = w.events_hr * (0.25 + 0.75 * f);
+    (req, ctx_in, ctx_out, events)
+}
+
+/// Fleet devices keep an orchestrator-competent supervisor even at deep idle.
+fn supervisor_floor(w: &Workload) -> &'static Model {
+    let id = if w.agents >= 2 { "openai/gpt-oss-20b" } else { "llama-3.1-8b-instant" };
+    MODELS.iter().find(|m| m.id == id).unwrap()
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Policy {
+    Static,
+    Naive,
+    Hysteresis,
+}
+
+struct DaySim {
+    cost: f64,
+    handovers: usize,
+    violations: usize,
+}
+
+fn day_sim(w: &Workload, dev: usize, policy: Policy) -> DaySim {
+    let floor = supervisor_floor(w);
+    let (req1, ci1, co1, _) = demand(w, 1.0);
+    let statik = cheapest_passing(req1, ci1, co1).unwrap();
+
+    let mut cur: &Model = statik;
+    let (mut cost, mut handovers, mut violations) = (0.0, 0, 0);
+    let mut dwell = 0usize;
+
+    for tick in 0..TICKS_PER_DAY {
+        let f = activity(dev, tick);
+        let (req, ci, co, events) = demand(w, f);
+        let need = req_accuracy_tier(req);
+        let mut best = cheapest_passing(req, ci, co).unwrap();
+        if best.tier < floor.tier {
+            best = floor;
+        }
+        let next = match policy {
+            Policy::Static => statik,
+            Policy::Naive => best,
+            Policy::Hysteresis => {
+                if accuracy_at(cur, req) < need || best.tier > cur.tier {
+                    dwell = 0;
+                    best // floor breached or bigger rung required: immediate
+                } else if best.tier < cur.tier {
+                    dwell += 1;
+                    if dwell >= SCALE_DOWN_DWELL {
+                        dwell = 0;
+                        best
+                    } else {
+                        cur
+                    }
+                } else {
+                    dwell = 0;
+                    best
+                }
+            }
+        };
+        if next.id != cur.id {
+            if tick > 0 {
+                handovers += 1;
+            }
+            cur = next;
+        }
+        if accuracy_at(cur, req) < need {
+            violations += 1;
+        }
+        // arch A call model at this activity level, one 5-min tick
+        let calls = events + HEARTBEATS_HR * (1.0 - (events / HEARTBEATS_HR).min(0.8));
+        cost += calls / 12.0 * call_cost(cur, ci, co);
+    }
+    DaySim { cost, handovers, violations }
+}
+
+/// Cheapest-passing rungs over the activity range, as (from_f, to_f, model).
+fn ladder_runs(w: &Workload) -> Vec<(f64, f64, &'static Model)> {
+    let mut runs: Vec<(f64, f64, &'static Model)> = Vec::new();
+    let mut start = 0.0;
+    let mut prev: Option<&Model> = None;
+    for i in 0..=100 {
+        let f = i as f64 / 100.0;
+        let (req, ci, co, _) = demand(w, f.max(0.02));
+        let m = cheapest_passing(req, ci, co).unwrap();
+        if let Some(p) = prev {
+            if p.id != m.id {
+                runs.push((start, (i - 1) as f64 / 100.0, p));
+                start = f;
+            }
+        }
+        prev = Some(m);
+    }
+    if let Some(p) = prev {
+        runs.push((start, 1.0, p));
+    }
+    runs
+}
+
+fn nick(m: &Model) -> &'static str {
+    match m.id {
+        "llama-3.1-8b-instant" => "8b-instant",
+        "meta-llama/llama-4-scout-17b-16e-instruct" => "l4-scout",
+        "openai/gpt-oss-20b" => "gpt-oss-20b",
+        "qwen/qwen3-32b" => "qwen3-32b",
+        "qwen/qwen3.6-27b" => "qwen3.6-27b",
+        "llama-3.3-70b-versatile" => "70b-versatile",
+        "openai/gpt-oss-120b" => "gpt-oss-120b",
+        "moonshotai/kimi-k2-instruct-0905" => "kimi-k2",
+        other => other,
+    }
+}
+
+fn scaling_section(s: &mut String, md: bool) {
+    h1(s, "Dynamic scaling handover — cheaper models when cores idle", md);
+    let _ = writeln!(s, "24 h synthetic activity curves (anchors + {:.0}% 3 h-wobble), 5-min ticks,",
+        WOBBLE * 100.0);
+    let _ = writeln!(s, "arch-A call model; demand interpolated between single-core and device peak.\n");
+
+    h2(s, "Model ladder per device (handover thresholds)", md);
+    if md {
+        let _ = writeln!(s, "| device | peak req tier | ladder over activity f |");
+        let _ = writeln!(s, "|--------|--------------:|------------------------|");
+    }
+    for w in WORKLOADS {
+        let runs = ladder_runs(w);
+        let mut parts: Vec<String> = Vec::new();
+        for (i, (from, to, m)) in runs.iter().enumerate() {
+            if i + 1 == runs.len() && *from > 0.0 {
+                parts.push(format!("{} f>{:.2}", nick(m), from));
+            } else if runs.len() == 1 {
+                parts.push(format!("{} (always)", nick(m)));
+            } else {
+                parts.push(format!("{} f≤{:.2}", nick(m), to));
+            }
+        }
+        if md {
+            let _ = writeln!(s, "| {} | {:.1} | {} |", w.name, w.req_tier, parts.join(" → "));
+        } else {
+            let _ = writeln!(s, "  {:<12} peak req {:.1}   {}", w.name, w.req_tier, parts.join(" → "));
+        }
+    }
+    let _ = writeln!(s);
+
+    h2(s, "Simulated day — static vs naive vs hysteresis", md);
+    if md {
+        let _ = writeln!(s, "| device | static $/day | naive $/day (handovers) | hysteresis $/day (handovers) | saved | floor violations |");
+        let _ = writeln!(s, "|--------|-------------:|------------------------:|-----------------------------:|------:|-----------------:|");
+    } else {
+        let _ = writeln!(s, "  {:<12} {:>9} {:>16} {:>20} {:>7} {:>8}",
+            "device", "static$", "naive$ (hd)", "hyst$ (hd)", "saved", "viols");
+    }
+    let (mut sum_static, mut sum_hyst) = (0.0, 0.0);
+    for (i, w) in WORKLOADS.iter().enumerate() {
+        let st = day_sim(w, i, Policy::Static);
+        let na = day_sim(w, i, Policy::Naive);
+        let hy = day_sim(w, i, Policy::Hysteresis);
+        sum_static += st.cost;
+        sum_hyst += hy.cost;
+        let saved = (1.0 - hy.cost / st.cost) * 100.0;
+        if md {
+            let _ = writeln!(s, "| {} | {} | {} ({}) | {} ({}) | {:.0}% | {} |",
+                w.name, money(st.cost), money(na.cost), na.handovers,
+                money(hy.cost), hy.handovers, saved, hy.violations);
+        } else {
+            let _ = writeln!(s, "  {:<12} {:>9} {:>16} {:>20} {:>6.0}% {:>8}",
+                w.name, money(st.cost),
+                format!("{} ({})", money(na.cost), na.handovers),
+                format!("{} ({})", money(hy.cost), hy.handovers),
+                saved, hy.violations);
+        }
+    }
+    let _ = writeln!(s, "\n  total: static {}/day → hysteresis {}/day ({:.0}% saved)",
+        money(sum_static), money(sum_hyst), (1.0 - sum_hyst / sum_static) * 100.0);
+
+    h2(s, "Handover strategy", md);
+    code(s, "1. rungs        8b-instant (single-agent idle) -> gpt-oss-20b (fleet\n\
+             \x20               floor) -> gpt-oss-120b (fleet peak); kimi-k2 premium only\n\
+2. scale UP     the tick the accuracy floor would breach — under-tier\n\
+             \x20   advice is worse than none; never wait\n\
+3. scale DOWN   only after the cheaper rung holds 2 ticks (10 min) —\n\
+             \x20   kills wobble flapping around a threshold\n\
+4. floor        devices running an orchestrator never drop below\n\
+             \x20   gpt-oss-20b, even at deep idle\n\
+5. free handover supervision calls are stateless — the previous model's\n\
+             \x20   last advice stays displayed until the new model's first\n\
+             \x20   response lands (atomic swap, no flicker)\n\
+6. degrade UP   if a handover call fails, keep the larger model\n\
+7. pre-arm      pv habits knows the per-hour profile — when the next\n\
+             \x20   hour historically runs >=2x current demand, warm the\n\
+             \x20   bigger rung one tick early\n\
+8. where it pays octo+ devices (peak req tier >= 3.5). quad and below\n\
+             \x20   already bottom out on the cheap rung — stay static", md);
+    let _ = writeln!(s);
+}
 
 /// Invariants that make the benchmark meaningful; used as a deliver gate.
 fn check() -> Result<(), String> {
