@@ -107,15 +107,27 @@ fn install_dir(system: bool) -> PathBuf {
     PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| "/tmp".into())).join(".local/bin")
 }
 
+fn dir_writable(dir: &Path) -> bool {
+    if !dir.is_dir() {
+        return false;
+    }
+    let probe = dir.join(".pv-write-test");
+    match fs::File::create(&probe) {
+        Ok(_) => {
+            let _ = fs::remove_file(&probe);
+            true
+        }
+        Err(_) => false,
+    }
+}
+
 fn install(binary: &Path, system: bool) -> Result<PathBuf, String> {
     let dir = install_dir(system);
     let dest = dir.join("pv");
-    let writable = dir.exists()
-        && fs::metadata(&dir).map(|_| fs::File::create(dir.join(".pv-write-test")).and_then(|_| fs::remove_file(dir.join(".pv-write-test"))).is_ok()).unwrap_or(false);
-    if writable || (!system && dir.parent().is_some()) {
-        if !dir.exists() {
-            fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
-        }
+    if !dir.exists() && !system {
+        fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
+    }
+    if dir_writable(&dir) {
         let tmp = dir.join(".pv-new");
         fs::copy(binary, &tmp).map_err(|e| format!("copy: {e}"))?;
         #[cfg(unix)]
@@ -127,7 +139,7 @@ fn install(binary: &Path, system: bool) -> Result<PathBuf, String> {
         fs::rename(&tmp, &dest).map_err(|e| format!("install to {}: {e}", dest.display()))?;
         return Ok(dest);
     }
-    // system target without write access → sudo install
+    // no write access → sudo install (covers --system and odd perms)
     let st = Command::new("sudo")
         .args(["install", "-m", "755"])
         .arg(binary)

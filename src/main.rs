@@ -14,6 +14,7 @@ mod procfs;
 mod recommend;
 mod session;
 mod suspend;
+mod update;
 
 use clap::{Parser, Subcommand};
 use display::Theme;
@@ -113,6 +114,24 @@ enum Cmd {
         #[arg(long)]
         no_infer: bool,
     },
+    /// Update pv: latest GitHub release binary, or clone+build from source
+    Update {
+        /// Force source build instead of release download
+        #[arg(long)]
+        source: bool,
+        /// Install to /usr/local/bin (via sudo) instead of ~/.local/bin
+        #[arg(long)]
+        system: bool,
+        /// Reinstall even when already on the latest version
+        #[arg(long)]
+        force: bool,
+        /// Only check versions, do not download or install
+        #[arg(long)]
+        check: bool,
+        /// GitHub repo to update from
+        #[arg(long, default_value_t = update::DEFAULT_REPO.to_string())]
+        repo: String,
+    },
 }
 
 extern "C" {
@@ -155,6 +174,9 @@ fn main() {
         Some(Cmd::Habits) => daemon::print_habits(&theme),
         Some(Cmd::Live { interval, model, no_infer }) => {
             live::run_live(&theme, interval, &model, no_infer)
+        }
+        Some(Cmd::Update { source, system, force, check, repo }) => {
+            update::run(&theme, &update::Options { source, system, force, check, repo })
         }
     };
     std::process::exit(code);
