@@ -582,15 +582,7 @@ pub fn policy(t: &Theme, apply: bool, init: bool) -> i32 {
 
 pub fn hosts(t: &Theme, init: bool) -> i32 {
     if init {
-        let path = {
-            let base = std::env::var("XDG_CONFIG_HOME")
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(|_| {
-                    std::path::PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| "/tmp".into()))
-                        .join(".config")
-                });
-            base.join("pv/hosts.toml")
-        };
+        let path = crate::procfs::xdg("XDG_CONFIG_HOME", ".config").join("pv/hosts.toml");
         if let Some(parent) = path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
