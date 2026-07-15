@@ -10,6 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/elci-group/pv/releases"><img alt="release" src="https://img.shields.io/github/v/release/elci-group/pv?style=flat-square&color=c96f2e"></a>
+  <a href="https://github.com/elci-group/pv/actions/workflows/ci.yml"><img alt="ci" src="https://img.shields.io/github/actions/workflow/status/elci-group/pv/ci.yml?branch=main&style=flat-square"></a>
   <a href="LICENSE"><img alt="license: MIT" src="https://img.shields.io/badge/license-MIT-39d6d6?style=flat-square"></a>
   <img alt="dependencies: 3" src="https://img.shields.io/badge/deps-3-f0a830?style=flat-square">
   <img alt="platform: linux" src="https://img.shields.io/badge/platform-linux-8a8f98?style=flat-square">
