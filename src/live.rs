@@ -275,8 +275,16 @@ fn render(
         t.score_colored(r.io.score),
         r.io.score
     );
-    let g1_vis = 4 + 8 + 4 + 5 + 8 + 4 + 4 + 8 + 4;
-    out.push(border(g1, g1_vis));
+    let g1_plain = format!(
+        "CPU {} {:>2}%  RAM {} {:>2}%  IO {} {:>2}%",
+        crate::display::bar(r.cpu.score, 8),
+        r.cpu.score,
+        crate::display::bar(r.memory.score, 8),
+        r.memory.score,
+        crate::display::bar(r.io.score, 8),
+        r.io.score
+    );
+    out.push(border(g1, vis(&g1_plain)));
 
     // gauges line 2
     let bat = r.battery_info.as_ref().map(|b| format!("BAT {}%{}", b.capacity, if b.discharging { "▼" } else { "▲" })).unwrap_or_else(|| "BAT --".into());
@@ -305,21 +313,19 @@ fn render(
             _ => " ".to_string(),
         };
         let is_susp = susp.iter().any(|s| s.key == app.key);
-        let state = if is_susp {
-            t.magenta("frozen")
+        let (state_word, state_rendered): (String, String) = if is_susp {
+            ("frozen".into(), t.magenta("frozen"))
         } else if app.cpu_pct >= 1.0 {
-            format!("{:.0}%", app.cpu_pct)
+            let w = format!("{:.0}%", app.cpu_pct);
+            (w.clone(), w)
         } else {
-            t.dim("idle")
+            ("idle".into(), t.dim("idle"))
         };
         let name = pad_to(app.display.clone(), vis(&app.display), 16);
         let line = format!(
             "{name} {} {:>6} {:>9} {}",
             pad_to(cat.clone(), vis(&cat), 10),
-            match &state {
-                s if !s.contains('\x1b') => pad_to(s.clone(), vis(s), 6),
-                s => pad_to(s.clone(), 4, 6), // colored short words
-            },
+            pad_to(state_rendered, vis(&state_word), 6),
             fmt_kb(app.rss_kb),
             trend
         );
