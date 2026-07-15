@@ -212,6 +212,7 @@ so they never enter that regime.
 
 ## RECOMMENDED BASELINE
 
+```
   default        openai/gpt-oss-20b                       (acc 65, $0.08/day)
   fallback       llama-3.1-8b-instant                     (acc 42, $0.02/day)
   quad+          openai/gpt-oss-20b                       (acc 60, $0.20/day)
@@ -223,3 +224,4 @@ so they never enter that regime.
   pv live note : pv's own narration panel is a single-core-class task —
                  llama-3.1-8b-instant stays the right default there; the
                  rows above govern *agentic workflow supervision*.
+```

@@ -475,6 +475,7 @@ cba = 0.45*acc + 0.25*stability + 0.15*freshness + 0.15*cost (ref $0.50/day)",
     }
 
     h1(&mut s, "RECOMMENDED BASELINE", md);
+    if md { let _ = writeln!(s, "```"); }
     let pick = |wi: usize| cheapest_pass(&WORKLOADS[wi], Arch::CachedNonStream)
         .map(|r| (r.model.id, r.out.cost_day, r.out.accuracy));
     let (single, dual, quad, octo, twelve) =
@@ -497,6 +498,7 @@ cba = 0.45*acc + 0.25*stability + 0.15*freshness + 0.15*cost (ref $0.50/day)",
     let _ = writeln!(s, "  pv live note : pv's own narration panel is a single-core-class task —");
     let _ = writeln!(s, "                 llama-3.1-8b-instant stays the right default there; the");
     let _ = writeln!(s, "                 rows above govern *agentic workflow supervision*.");
+    if md { let _ = writeln!(s, "```"); }
 
     s
 }
