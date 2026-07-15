@@ -141,8 +141,11 @@ enum Cmd {
         #[arg(long)]
         no_infer: bool,
     },
+    /// Environment preflight: external tools and config pv relies on
+    Doctor,
     /// Update pv: latest GitHub release binary, or clone+build from source
-    Update {        /// Force source build instead of release download
+    Update {
+        /// Force source build instead of release download
         #[arg(long)]
         source: bool,
         /// Install to /usr/local/bin (via sudo) instead of ~/.local/bin
@@ -204,6 +207,7 @@ fn main() {
         }
         Some(Cmd::Notify { desktop }) => daemon::run_notify(&theme, desktop),
         Some(Cmd::Habits) => daemon::print_habits(&theme),
+        Some(Cmd::Doctor) => doctor::run(&theme),
         Some(Cmd::Live {
             interval,
             model,

@@ -13,17 +13,61 @@ struct Probe {
 }
 
 const PROBES: &[Probe] = &[
-    Probe { tool: "curl",        required: true,  used_for: "Groq inference, pv update" },
-    Probe { tool: "sha256sum",   required: true,  used_for: "update checksum verification" },
-    Probe { tool: "ssh",         required: false, used_for: "pv migrate, pv run --remote" },
-    Probe { tool: "rsync",       required: false, used_for: "pv migrate file copy" },
-    Probe { tool: "git",         required: false, used_for: "pv update --source" },
-    Probe { tool: "cargo",       required: false, used_for: "pv update --source" },
-    Probe { tool: "notify-send", required: false, used_for: "desktop valve notifications" },
-    Probe { tool: "getconf",     required: false, used_for: "precise CPU tick rate" },
-    Probe { tool: "renice",      required: false, used_for: "policy throttle actions" },
-    Probe { tool: "ionice",      required: false, used_for: "policy throttle actions" },
-    Probe { tool: "stty",        required: false, used_for: "pv live terminal size" },
+    Probe {
+        tool: "curl",
+        required: true,
+        used_for: "Groq inference, pv update",
+    },
+    Probe {
+        tool: "sha256sum",
+        required: true,
+        used_for: "update checksum verification",
+    },
+    Probe {
+        tool: "ssh",
+        required: false,
+        used_for: "pv migrate, pv run --remote",
+    },
+    Probe {
+        tool: "rsync",
+        required: false,
+        used_for: "pv migrate file copy",
+    },
+    Probe {
+        tool: "git",
+        required: false,
+        used_for: "pv update --source",
+    },
+    Probe {
+        tool: "cargo",
+        required: false,
+        used_for: "pv update --source",
+    },
+    Probe {
+        tool: "notify-send",
+        required: false,
+        used_for: "desktop valve notifications",
+    },
+    Probe {
+        tool: "getconf",
+        required: false,
+        used_for: "precise CPU tick rate",
+    },
+    Probe {
+        tool: "renice",
+        required: false,
+        used_for: "policy throttle actions",
+    },
+    Probe {
+        tool: "ionice",
+        required: false,
+        used_for: "policy throttle actions",
+    },
+    Probe {
+        tool: "stty",
+        required: false,
+        used_for: "pv live terminal size",
+    },
 ];
 
 /// True when `tool` resolves to an executable regular file on $PATH.
@@ -80,7 +124,11 @@ pub fn run(t: &Theme) -> i32 {
     println!(
         " {:<12} {}  {}",
         "groq key",
-        if groq { t.green("✓") } else { t.yellow("· not set") },
+        if groq {
+            t.green("✓")
+        } else {
+            t.yellow("· not set")
+        },
         t.dim("inference ($GROQ_API_KEY or ~/.config/pv/groq_api_key)")
     );
     for (file, what) in [
@@ -91,7 +139,11 @@ pub fn run(t: &Theme) -> i32 {
         println!(
             " {:<12} {}  {}",
             file,
-            if ok { t.green("✓") } else { t.dim("· not created") },
+            if ok {
+                t.green("✓")
+            } else {
+                t.dim("· not created")
+            },
             t.dim(what)
         );
     }
