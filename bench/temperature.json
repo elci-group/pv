@@ -1,8 +1,13 @@
 {
  "fetched": "2026-07-15 17:23 UTC",
- "reps": 1,
+ "reps": 5,
  "temps": [
-  0.2
+  0.0,
+  0.2,
+  0.5,
+  0.8,
+  1.0,
+  1.5
  ],
  "probes": [
   "json",
@@ -11,18 +16,26 @@
  ],
  "cells": {
   "llama-3.1-8b-instant": {
-   "0.2": {
+   "0.0": {
     "json": {
-     "pass": 1,
+     "pass": 5,
      "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
       "suspend"
      ],
      "tokens": 26,
      "errors": 0
     },
     "action": {
-     "pass": 1,
+     "pass": 5,
      "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
       "SUSPEND_BROWSER"
      ],
      "tokens": 5,
@@ -31,7 +44,431 @@
     "arith": {
      "pass": 0,
      "answers": [
+      "11",
+      "11",
+      "11",
+      "11",
+      "11"
+     ],
+     "tokens": 2,
+     "errors": 0
+    }
+   },
+   "0.2": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 26,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 5,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 0,
+     "answers": [
+      "11",
+      "9",
+      "9",
+      "11",
+      "92"
+     ],
+     "tokens": 2,
+     "errors": 0
+    }
+   },
+   "0.5": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 25,
+     "errors": 0
+    },
+    "action": {
+     "pass": 2,
+     "answers": [
+      "THROTTLE_INDEXER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "THROTTLE_INDEXER",
+      "THROTTLE_INDEXER"
+     ],
+     "tokens": 6,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 0,
+     "answers": [
+      "9",
+      "0",
+      "9",
+      "11",
+      "12"
+     ],
+     "tokens": 2,
+     "errors": 0
+    }
+   },
+   "0.8": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 26,
+     "errors": 0
+    },
+    "action": {
+     "pass": 2,
+     "answers": [
+      "THROTTLE_INDEXER",
+      "MIGRATE_BUILD",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "MIGRATE_BUILD"
+     ],
+     "tokens": 5,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 0,
+     "answers": [
+      "93",
+      "92",
+      "12",
+      "11",
+      "92"
+     ],
+     "tokens": 2,
+     "errors": 0
+    }
+   },
+   "1.0": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 25,
+     "errors": 0
+    },
+    "action": {
+     "pass": 3,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "THROTTLE_INDEXER",
+      "SUSPEND_BROWSER",
+      "MIGRATE_BUILD"
+     ],
+     "tokens": 5,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 0,
+     "answers": [
+      "9",
+      "11",
+      "8",
+      "92",
       "9"
+     ],
+     "tokens": 2,
+     "errors": 0
+    }
+   },
+   "1.5": {
+    "json": {
+     "pass": 3,
+     "answers": [
+      "throttle",
+      "migrate",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 24,
+     "errors": 0
+    },
+    "action": {
+     "pass": 3,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "MIGRATE_BUILD",
+      "THROTTLE_INDEXER"
+     ],
+     "tokens": 5,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 0,
+     "answers": [
+      "9",
+      "12",
+      "9",
+      "9",
+      "9"
+     ],
+     "tokens": 5,
+     "errors": 0
+    }
+   }
+  },
+  "meta-llama/llama-4-scout-17b-16e-instruct": {
+   "0.0": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 22,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 6,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 2,
+     "errors": 0
+    }
+   },
+   "0.2": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 22,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 6,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 2,
+     "errors": 0
+    }
+   },
+   "0.5": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 22,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 6,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 2,
+     "errors": 0
+    }
+   },
+   "0.8": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 22,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 6,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 2,
+     "errors": 0
+    }
+   },
+   "1.0": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 22,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 6,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 2,
+     "errors": 0
+    }
+   },
+   "1.5": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 22,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 6,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 4,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "938"
      ],
      "tokens": 2,
      "errors": 0
@@ -39,29 +476,1151 @@
    }
   },
   "openai/gpt-oss-20b": {
-   "0.2": {
+   "0.0": {
     "json": {
-     "pass": 1,
+     "pass": 5,
      "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
       "suspend"
      ],
-     "tokens": 119,
+     "tokens": 120,
      "errors": 0
     },
     "action": {
-     "pass": 1,
+     "pass": 5,
      "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
       "SUSPEND_BROWSER"
      ],
-     "tokens": 250,
+     "tokens": 266,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 82,
+     "errors": 0
+    }
+   },
+   "0.2": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 105,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 196,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 82,
+     "errors": 0
+    }
+   },
+   "0.5": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 138,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 311,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 80,
+     "errors": 0
+    }
+   },
+   "0.8": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 193,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 240,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 92,
+     "errors": 0
+    }
+   },
+   "1.0": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 182,
+     "errors": 0
+    },
+    "action": {
+     "pass": 4,
+     "answers": [
+      "MIGRATE_BUILD",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 294,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 79,
+     "errors": 0
+    }
+   },
+   "1.5": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 165,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 308,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 75,
+     "errors": 0
+    }
+   }
+  },
+  "qwen/qwen3-32b": {
+   "0.0": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 328,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 297,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 440,
+     "errors": 0
+    }
+   },
+   "0.2": {
+    "json": {
+     "pass": 2,
+     "answers": [
+      "parse-fail",
+      "suspend",
+      "parse-fail",
+      "parse-fail",
+      "suspend"
+     ],
+     "tokens": 309,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 337,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 411,
+     "errors": 0
+    }
+   },
+   "0.5": {
+    "json": {
+     "pass": 4,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "parse-fail",
+      "suspend"
+     ],
+     "tokens": 267,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 383,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 346,
+     "errors": 0
+    }
+   },
+   "0.8": {
+    "json": {
+     "pass": 4,
+     "answers": [
+      "suspend",
+      "parse-fail",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 262,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 319,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 369,
+     "errors": 0
+    }
+   },
+   "1.0": {
+    "json": {
+     "pass": 3,
+     "answers": [
+      "parse-fail",
+      "suspend",
+      "suspend",
+      "parse-fail",
+      "suspend"
+     ],
+     "tokens": 267,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 286,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 495,
+     "errors": 0
+    }
+   },
+   "1.5": {
+    "json": {
+     "pass": 4,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "parse-fail",
+      "suspend"
+     ],
+     "tokens": 357,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 344,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 4,
+     "answers": [
+      "93583",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 538,
+     "errors": 0
+    }
+   }
+  },
+  "qwen/qwen3.6-27b": {
+   "0.0": {
+    "json": {
+     "pass": 0,
+     "answers": [
+      "parse-fail",
+      "parse-fail",
+      "parse-fail",
+      "parse-fail",
+      "parse-fail"
+     ],
+     "tokens": 773,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 552,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 836,
+     "errors": 0
+    }
+   },
+   "0.2": {
+    "json": {
+     "pass": 0,
+     "answers": [
+      "parse-fail",
+      "parse-fail",
+      "parse-fail",
+      "parse-fail",
+      "parse-fail"
+     ],
+     "tokens": 711,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 613,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 745,
+     "errors": 0
+    }
+   },
+   "0.5": {
+    "json": {
+     "pass": 0,
+     "answers": [
+      "parse-fail",
+      "parse-fail",
+      "parse-fail",
+      "parse-fail",
+      "parse-fail"
+     ],
+     "tokens": 598,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 634,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 4,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "5833"
+     ],
+     "tokens": 720,
+     "errors": 0
+    }
+   },
+   "0.8": {
+    "json": {
+     "pass": 0,
+     "answers": [
+      "parse-fail",
+      "parse-fail",
+      "parse-fail",
+      "parse-fail",
+      "parse-fail"
+     ],
+     "tokens": 606,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 487,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 655,
+     "errors": 0
+    }
+   },
+   "1.0": {
+    "json": {
+     "pass": 0,
+     "answers": [
+      "parse-fail",
+      "parse-fail",
+      "parse-fail",
+      "parse-fail",
+      "parse-fail"
+     ],
+     "tokens": 891,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 662,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 592,
+     "errors": 0
+    }
+   },
+   "1.5": {
+    "json": {
+     "pass": 0,
+     "answers": [
+      "parse-fail",
+      "parse-fail",
+      "parse-fail",
+      "parse-fail",
+      "parse-fail"
+     ],
+     "tokens": 414,
+     "errors": 0
+    },
+    "action": {
+     "pass": 3,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "MIGRATE_BUILD",
+      "NONE",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 436,
      "errors": 0
     },
     "arith": {
      "pass": 1,
      "answers": [
+      "11",
+      "3",
+      "94",
+      "9",
+      "9"
+     ],
+     "tokens": 650,
+     "errors": 0
+    }
+   }
+  },
+  "llama-3.3-70b-versatile": {
+   "0.0": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 21,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 5,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
       "94"
      ],
-     "tokens": 72,
+     "tokens": 2,
+     "errors": 0
+    }
+   },
+   "0.2": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 21,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 5,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 2,
+     "errors": 0
+    }
+   },
+   "0.5": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 21,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 5,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 4,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "93"
+     ],
+     "tokens": 2,
+     "errors": 0
+    }
+   },
+   "0.8": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 21,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 5,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 4,
+     "answers": [
+      "93",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 2,
+     "errors": 0
+    }
+   },
+   "1.0": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 21,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 5,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 3,
+     "answers": [
+      "93",
+      "93",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 2,
+     "errors": 0
+    }
+   },
+   "1.5": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 21,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 5,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 4,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "93",
+      "94"
+     ],
+     "tokens": 2,
+     "errors": 0
+    }
+   }
+  },
+  "openai/gpt-oss-120b": {
+   "0.0": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 99,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 157,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 66,
+     "errors": 0
+    }
+   },
+   "0.2": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 117,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 125,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 66,
+     "errors": 0
+    }
+   },
+   "0.5": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 120,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 154,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 69,
+     "errors": 0
+    }
+   },
+   "0.8": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 121,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 144,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 88,
+     "errors": 0
+    }
+   },
+   "1.0": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 122,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 140,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 92,
+     "errors": 0
+    }
+   },
+   "1.5": {
+    "json": {
+     "pass": 5,
+     "answers": [
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend",
+      "suspend"
+     ],
+     "tokens": 179,
+     "errors": 0
+    },
+    "action": {
+     "pass": 5,
+     "answers": [
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER",
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 158,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 5,
+     "answers": [
+      "94",
+      "94",
+      "94",
+      "94",
+      "94"
+     ],
+     "tokens": 94,
      "errors": 0
     }
    }
