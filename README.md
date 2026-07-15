@@ -54,6 +54,11 @@ install -Dm644 docs/pv.1 ~/.local/share/man/man1/pv.1
 man pv
 ```
 
+- `bench/REPORT.md` — simulated Groq model CBA (`pv_bench` bin): all current
+  Groq text models across five synthetic agentic workloads (1/2/4/8/12-core),
+  comparing the time-cached non-streaming architecture against low-latency
+  streaming. Re-run with `cargo run --release --bin pv_bench`.
+
 ## Commands
 
 ### `pv` — dashboard
