@@ -381,6 +381,9 @@ cba = 0.45*acc + 0.25*stability + 0.15*freshness + 0.15*cost (ref $0.50/day)",
         HEARTBEATS_HR as u32, STREAM_INTERVAL_S as u32, TIER_PENALTY * 100.0,
         BASE_PASS, PASS_PER_TIER), md);
 
+    // ---- measured temperature sweep ---------------------------------------------
+    temp_section(&mut s, md);
+
     // ---- per-workload detail ------------------------------------------------
     h1(&mut s, "Workload results", md);
     for w in WORKLOADS {
@@ -527,6 +530,7 @@ cba = 0.45*acc + 0.25*stability + 0.15*freshness + 0.15*cost (ref $0.50/day)",
     let _ = writeln!(s, "  escalation   : move up one row when req tier exceeds the row's model");
     let _ = writeln!(s, "  handover     : dynamic ladder 8b <-> 20b <-> 120b over the day; pays on");
     let _ = writeln!(s, "                 octo+ devices — quad and below stay static (see above)");
+    let _ = writeln!(s, "  temperature  : 0.0 for all supervision calls (measured sweep; pv was 0.2)");
     let _ = writeln!(s, "  pv live note : pv's own narration panel is a single-core-class task —");
     let _ = writeln!(s, "                 llama-3.1-8b-instant stays the right default there; the");
     let _ = writeln!(s, "                 rows above govern *agentic workflow supervision*.");
@@ -695,6 +699,116 @@ fn ladder_runs(w: &Workload) -> Vec<(f64, f64, &'static Model)> {
     runs
 }
 
+// ---------------------------------------------------------------------------
+// Measured temperature sweep
+// ---------------------------------------------------------------------------
+
+/// One row of the measured sweep: (pass, agree, tok/call) per TEMPS point.
+struct TempRow {
+    model: &'static str,
+    cells: [(f64, f64, u32); 6],
+}
+
+/// bench/temp_probe.py, 630 real Groq API calls, 2026-07-15.
+/// pass = fraction of 15 deterministically-graded supervisor probes correct;
+/// agree = self-agreement across 5 identical reps.
+/// kimi-k2-0905 excluded: gated off the developer tier (model_not_found).
+const TEMPS: [f64; 6] = [0.0, 0.2, 0.5, 0.8, 1.0, 1.5];
+const TEMP_SWEEP: &[TempRow] = &[
+    TempRow { model: "llama-3.1-8b-instant", cells: [
+        (0.67, 1.00, 11), (0.67, 0.80, 11), (0.47, 0.67, 11),
+        (0.47, 0.60, 11), (0.53, 0.67, 11), (0.40, 0.67, 11)] },
+    TempRow { model: "meta-llama/llama-4-scout-17b-16e-instruct", cells: [
+        (1.00, 1.00, 10), (1.00, 1.00, 10), (1.00, 1.00, 10),
+        (1.00, 1.00, 10), (1.00, 1.00, 10), (0.93, 0.93, 10)] },
+    TempRow { model: "openai/gpt-oss-20b", cells: [
+        (1.00, 1.00, 156), (1.00, 1.00, 128), (1.00, 1.00, 176),
+        (1.00, 1.00, 175), (0.93, 0.93, 185), (1.00, 1.00, 183)] },
+    TempRow { model: "qwen/qwen3-32b", cells: [
+        (1.00, 1.00, 355), (0.80, 0.87, 352), (0.93, 0.93, 332),
+        (0.93, 0.93, 317), (0.87, 0.87, 349), (0.87, 0.87, 413)] },
+    TempRow { model: "qwen/qwen3.6-27b", cells: [
+        (0.67, 1.00, 720), (0.67, 1.00, 690), (0.60, 0.93, 651),
+        (0.67, 1.00, 583), (0.67, 1.00, 715), (0.27, 0.67, 500)] },
+    TempRow { model: "llama-3.3-70b-versatile", cells: [
+        (1.00, 1.00, 9), (1.00, 1.00, 9), (0.93, 0.93, 9),
+        (0.93, 0.93, 9), (0.87, 0.87, 9), (0.93, 0.93, 9)] },
+    TempRow { model: "openai/gpt-oss-120b", cells: [
+        (1.00, 1.00, 107), (1.00, 1.00, 103), (1.00, 1.00, 114),
+        (1.00, 1.00, 118), (1.00, 1.00, 118), (1.00, 1.00, 144)] },
+];
+
+/// First argmax of pass*agree — ties resolve to the lowest temperature.
+fn ideal_idx(row: &TempRow) -> usize {
+    let mut best = 0;
+    for (i, &(pass, agree, _)) in row.cells.iter().enumerate() {
+        if pass * agree > row.cells[best].0 * row.cells[best].1 {
+            best = i;
+        }
+    }
+    best
+}
+
+/// Highest temp where every point from 0.0 up still scores ≥ 90% of ideal.
+fn safe_max_temp(row: &TempRow) -> f64 {
+    let bi = ideal_idx(row);
+    let ideal = row.cells[bi].0 * row.cells[bi].1;
+    let mut safe = TEMPS[0];
+    for (i, &(pass, agree, _)) in row.cells.iter().enumerate() {
+        if pass * agree >= 0.9 * ideal {
+            safe = TEMPS[i];
+        } else {
+            break;
+        }
+    }
+    safe
+}
+
+fn temp_section(s: &mut String, md: bool) {
+    h1(s, "Inference temperature (measured — 630 real API calls, 2026-07-15)", md);
+    let _ = writeln!(s, "3 deterministically-graded supervisor probes (JSON action emission, enum");
+    let _ = writeln!(s, "action selection, capacity arithmetic) x 5 identical reps x 6 temperatures.");
+    let _ = writeln!(s, "pass = correctness vs exact rules, agree = self-agreement across reps.");
+    let _ = writeln!(s, "kimi-k2-0905 excluded: gated off the developer tier (model_not_found).\n");
+
+    if md {
+        let _ = writeln!(s, "| model | 0.0 | 0.2 | 0.5 | 0.8 | 1.0 | 1.5 | ideal | safe ≤ | tok/call |");
+        let _ = writeln!(s, "|-------|----:|----:|----:|----:|----:|----:|------:|-------:|---------:|");
+    } else {
+        let _ = writeln!(s, "  {:<40} {:>28} {:>6} {:>6} {:>6}",
+            "model", "pass @ 0.0/0.2/0.5/0.8/1.0/1.5", "ideal", "safe<=", "tok");
+    }
+    for row in TEMP_SWEEP {
+        let bi = ideal_idx(row);
+        let passes: Vec<String> = row.cells.iter().map(|c| format!("{:.2}", c.0)).collect();
+        if md {
+            let _ = writeln!(s, "| `{}` | {} | **{:.1}** | {:.1} | {} |",
+                row.model, passes.join(" | "), TEMPS[bi], safe_max_temp(row), row.cells[bi].2);
+        } else {
+            let _ = writeln!(s, "  {:<40} {:>28} {:>6.1} {:>6.1} {:>6}",
+                row.model, passes.join(" "), TEMPS[bi], safe_max_temp(row), row.cells[bi].2);
+        }
+    }
+
+    h2(s, "Findings", md);
+    code(s, "1. temp 0.0 is ideal for EVERY measured model — no model gained\n\
+             \x20   anything from temperature; agreement is the first casualty\n\
+2. pv's old 0.2 default was harmless for strong models but already cost\n\
+             \x20   8b-instant 20% agreement — pv now calls at temperature 0.0\n\
+3. high temp inflates reasoning tokens (gpt-oss-120b +35%, qwen3-32b +16%\n\
+             \x20   at 1.5) — slower and costlier for worse answers\n\
+4. qwen3.6-27b cannot emit single-JSON at ANY temp (parse-fail 5/5 across\n\
+             \x20   the board) and collapses at 1.5 — unsuitable for structured\n\
+             \x20   supervision output regardless of temperature\n\
+5. 8b-instant's cap is capability, not temperature (arith 0/5 at every\n\
+             \x20   temp) — temperature cannot fix a weak model, it can only\n\
+             \x20   break a strong one\n\
+6. per-model safe ceilings: 120b eats anything (<=1.5); scout <=1.0;\n\
+             \x20   gpt-oss-20b <=0.8; 70b <=0.2; 8b, qwen3-32b, qwen3.6\n\
+             \x20   need 0.0 (or near it) to stay reliable", md);
+    let _ = writeln!(s);
+}
+
 fn nick(m: &Model) -> &'static str {
     match m.id {
         "llama-3.1-8b-instant" => "8b-instant",
@@ -852,6 +966,31 @@ fn check() -> Result<(), String> {
             money(hy_big),
             money(st_big)
         ));
+    }
+    // measured temperature sweep: determinism and direction sanity
+    if TEMP_SWEEP.len() < 7 {
+        return Err("temperature sweep covers under 7 models".into());
+    }
+    let mut strong = 0;
+    for row in TEMP_SWEEP {
+        if row.cells[0].1 < 0.9 {
+            return Err(format!("{}: agreement at temp 0.0 below 0.9", row.model));
+        }
+        let bi = ideal_idx(row);
+        if TEMPS[bi] > 0.2 {
+            return Err(format!("{}: ideal temp above 0.2 — supervision claim broken", row.model));
+        }
+        let ideal = row.cells[bi].0 * row.cells[bi].1;
+        let hot = row.cells[5].0 * row.cells[5].1;
+        if ideal < hot {
+            return Err(format!("{}: scores better at 1.5 than at ideal — sweep noise?", row.model));
+        }
+        if row.cells[bi].0 >= 0.9 {
+            strong += 1;
+        }
+    }
+    if strong < 5 {
+        return Err("under 5 models pass >= 0.9 at their ideal temp".into());
     }
     Ok(())
 }
