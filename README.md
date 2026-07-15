@@ -5,8 +5,7 @@
 <h1 align="center">pv — Pressure Valve</h1>
 
 <p align="center">
-  <strong>Intelligent process lifecycle management.</strong><br>
-  The process is no longer sacred. The objective is.
+  <strong>Intelligent process lifecycle management.</strong>
 </p>
 
 <p align="center">
@@ -44,6 +43,16 @@ cargo build --release
 
 No services, no daemon, no root. Everything is read from `/proc`, `/sys`, and
 kernel PSI (`/proc/pressure/*`) at invocation time.
+
+## Documentation
+
+- `pv --help` — command overview with the valve mark
+- `docs/pv.1` — the man page:
+
+```sh
+install -Dm644 docs/pv.1 ~/.local/share/man/man1/pv.1
+man pv
+```
 
 ## Commands
 
