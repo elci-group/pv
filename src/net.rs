@@ -3,6 +3,7 @@
 //! HTTP/TLS crates out of the dependency tree at the cost of requiring the
 //! `curl` binary at runtime (see `pv doctor`).
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -90,10 +91,40 @@ pub fn write_bearer_config(key: &str) -> Result<BearerConfig, String> {
         .mode(0o600)
         .open(&path)
         .map_err(|e| format!("create {}: {e}", path.display()))?;
-    use std::io::Write;
     writeln!(f, "header = \"Authorization: Bearer {key}\"")
         .map_err(|e| format!("write {}: {e}", path.display()))?;
     Ok(BearerConfig(path))
+}
+
+/// Spawn a streaming POST (`curl -sN`, SSE-style) with bearer auth via `-K`
+/// config; `payload` is written to curl's stdin. The caller reads the
+/// response body line-by-line from the returned child's stdout and is
+/// responsible for wait/kill.
+pub fn spawn_streaming_post(
+    url: &str,
+    auth: &BearerConfig,
+    payload: &str,
+) -> Result<std::process::Child, String> {
+    let mut child = Command::new("curl")
+        .args(["-sN", "-X", "POST", url, "-K"])
+        .arg(auth.path())
+        .args([
+            "-H",
+            "Content-Type: application/json",
+            "--data-binary",
+            "@-",
+            "--max-time",
+            "30",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("curl spawn: {e}"))?;
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(payload.as_bytes());
+    }
+    Ok(child)
 }
 
 #[cfg(test)]
@@ -133,8 +164,8 @@ mod tests {
 
     #[test]
     fn get_string_reports_failure() {
-        // unroutable TEST-NET address; must error, not panic or hang
-        let r = get_string("http://192.0.2.1:9/", &[]);
+        // loopback port 9 (discard): connection refused, fails fast
+        let r = get_string("http://127.0.0.1:9/", &[]);
         assert!(r.is_err());
     }
 }

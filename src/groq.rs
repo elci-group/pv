@@ -3,8 +3,7 @@
 //!
 //! Key resolution: $GROQ_API_KEY, then ~/.config/pv/groq_api_key.
 
-use std::io::{BufRead, BufReader, Write};
-use std::process::{Command, Stdio};
+use std::io::{BufRead, BufReader};
 use std::sync::mpsc::{channel, Receiver};
 
 pub use crate::net::have_curl;
@@ -52,37 +51,13 @@ pub fn stream(model: &str, system: &str, user: &str, key: &str) -> Receiver<Groq
                 return;
             }
         };
-        let config_path = config.path().to_string_lossy().into_owned();
-        let spawned = Command::new("curl")
-            .args([
-                "-sN",
-                "-X",
-                "POST",
-                URL,
-                "-K",
-                &config_path,
-                "-H",
-                "Content-Type: application/json",
-                "--data-binary",
-                "@-",
-                "--max-time",
-                "30",
-            ])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn();
-
-        let mut child = match spawned {
+        let mut child = match crate::net::spawn_streaming_post(URL, &config, &payload) {
             Ok(c) => c,
             Err(e) => {
-                let _ = tx.send(GroqEvent::Error(format!("curl spawn: {e}")));
+                let _ = tx.send(GroqEvent::Error(e));
                 return;
             }
         };
-        if let Some(mut stdin) = child.stdin.take() {
-            let _ = stdin.write_all(payload.as_bytes());
-        }
         let mut got_token = false;
         if let Some(stdout) = child.stdout.take() {
             for line in BufReader::new(stdout).lines() {
