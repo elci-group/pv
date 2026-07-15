@@ -27,12 +27,14 @@ struct History {
 }
 
 impl History {
-    fn push(&mut self, r: &PressureReport) {
+    /// Record one sample. `load1` is passed in so the window math stays pure
+    /// and testable; the loop reads `/proc/loadavg` at the call site.
+    fn push(&mut self, r: &PressureReport, load1: f64) {
         self.mem_used_kb
             .push_back(r.mem.total_kb - r.mem.available_kb);
         self.swap_used_kb
             .push_back(r.mem.swap_total_kb - r.mem.swap_free_kb);
-        self.load1.push_back(procfs::loadavg().0);
+        self.load1.push_back(load1);
         for q in [&mut self.mem_used_kb, &mut self.swap_used_kb] {
             while q.len() > WINDOW {
                 q.pop_front();
@@ -139,8 +141,13 @@ impl Habits {
     }
 
     fn observe(&mut self, cpu_pct: f64, mem_pct: f64, cv: f64, categories: &[String]) {
-        let hour = notify::local_hour();
-        let s = &mut self.slots[hour];
+        self.observe_at(notify::local_hour(), cpu_pct, mem_pct, cv, categories);
+    }
+
+    /// Record one sample into the slot for `hour`. Split from `observe` so the
+    /// accumulation logic can be tested without the wall clock.
+    fn observe_at(&mut self, hour: usize, cpu_pct: f64, mem_pct: f64, cv: f64, categories: &[String]) {
+        let s = &mut self.slots[hour % 24];
         let a = if s.samples < 50 { 0.2 } else { 0.05 }; // learn fast early
         s.cpu_ema = if s.samples == 0 {
             cpu_pct
@@ -200,11 +207,44 @@ fn mem_used_pct(r: &PressureReport) -> f64 {
     (1.0 - r.mem.available_kb as f64 / r.mem.total_kb.max(1) as f64) * 100.0
 }
 
+/// Ambient system readings the valves consult, sampled once per daemon tick
+/// so the decision step below is a pure function of observed state + habits.
+#[derive(Debug, Clone)]
+struct SysSample {
+    ncpu: usize,
+    load1: f64,
+    psi_mem_some_avg10: f64,
+    hottest_thermal: Option<f64>,
+    hour: usize,
+}
+
+impl SysSample {
+    fn read() -> Self {
+        SysSample {
+            ncpu: procfs::cpu_count(),
+            load1: procfs::loadavg().0,
+            psi_mem_some_avg10: procfs::psi("memory").unwrap_or_default().some_avg10,
+            hottest_thermal: procfs::hottest_thermal(),
+            hour: notify::local_hour(),
+        }
+    }
+}
+
 /// Valves that only need the current moment — shared by `pv notify`.
 pub fn oneshot_notices(
     apps: &[App],
     intents: &[(String, Intent)],
     report: &PressureReport,
+) -> Vec<Notice> {
+    oneshot_notices_at(apps, intents, report, procfs::hottest_thermal())
+}
+
+/// Same valves with the thermal reading passed in — the pure core.
+fn oneshot_notices_at(
+    apps: &[App],
+    intents: &[(String, Intent)],
+    report: &PressureReport,
+    hottest_thermal: Option<f64>,
 ) -> Vec<Notice> {
     let mut out = Vec::new();
     let used = mem_used_pct(report);
@@ -296,7 +336,7 @@ pub fn oneshot_notices(
     }
 
     // V-08 thermals
-    if let Some(temp) = procfs::hottest_thermal() {
+    if let Some(temp) = hottest_thermal {
         if temp >= 82.0 {
             let hog = apps
                 .iter()
@@ -338,12 +378,13 @@ pub fn oneshot_notices(
 }
 
 /// Valves that need history and habit context — daemon only.
-fn history_notices(ctx: &Ctx) -> Vec<Notice> {
+/// Pure: every ambient reading arrives via `sys`.
+fn history_notices(ctx: &Ctx, sys: &SysSample) -> Vec<Notice> {
     let mut out = Vec::new();
     let r = ctx.report;
     let used = mem_used_pct(r);
-    let ncpu = procfs::cpu_count() as f64;
-    let cpu_pct = procfs::loadavg().0 / ncpu * 100.0;
+    let ncpu = sys.ncpu as f64;
+    let cpu_pct = sys.load1 / ncpu * 100.0;
     let slope = ctx.hist.mem_slope_kb_s(ctx.interval);
 
     // V-01 escalation: sustained climb before we hit the critical line
@@ -376,7 +417,7 @@ fn history_notices(ctx: &Ctx) -> Vec<Notice> {
     }
 
     // V-02 demand spike vs habit baseline for this hour
-    let slot = ctx.habits.slot(notify::local_hour());
+    let slot = ctx.habits.slot(sys.hour);
     if slot.samples >= 20 && slot.cpu_ema > 5.0 && cpu_pct > slot.cpu_ema * 1.8 && cpu_pct > 40.0 {
         let hog = ctx
             .apps
@@ -404,13 +445,13 @@ fn history_notices(ctx: &Ctx) -> Vec<Notice> {
     }
 
     // V-04 swap thrash risk
-    let psi_mem = procfs::psi("memory").unwrap_or_default();
-    if ctx.hist.swap_growth_kb() > 50_000 && psi_mem.some_avg10 > 1.0 {
+    let psi_some = sys.psi_mem_some_avg10;
+    if ctx.hist.swap_growth_kb() > 50_000 && psi_some > 1.0 {
         out.push(Notice {
             level: Level::Warning,
             valve: "V-04",
             title: "SWAP THRASH RISK".into(),
-            gauge: Some(("MEM-PSI".into(), psi_mem.some_avg10.min(100.0) as u8)),
+            gauge: Some(("MEM-PSI".into(), psi_some.min(100.0) as u8)),
             obs: vec![
                 format!(
                     "swap grew {} across the window",
@@ -418,7 +459,7 @@ fn history_notices(ctx: &Ctx) -> Vec<Notice> {
                 ),
                 format!(
                     "memory stall {:.0}% — the kernel is paging under load",
-                    psi_mem.some_avg10
+                    psi_some
                 ),
             ],
             suggest: Some("relieve pressure or expect stalls".into()),
@@ -446,7 +487,7 @@ fn history_notices(ctx: &Ctx) -> Vec<Notice> {
     }
 
     // V-06 habit forecast: next hour historically heavier
-    let next = ctx.habits.slot(notify::local_hour() + 1);
+    let next = ctx.habits.slot(sys.hour + 1);
     if next.samples >= 20 && next.mem_ema - used > 15.0 {
         out.push(Notice {
             level: Level::Advisory,
@@ -456,7 +497,7 @@ fn history_notices(ctx: &Ctx) -> Vec<Notice> {
             obs: vec![
                 format!(
                     "your {}:00 block usually runs ~{:.0}% RAM (now {:.0}%)",
-                    (notify::local_hour() + 1) % 24,
+                    (sys.hour + 1) % 24,
                     next.mem_ema,
                     used
                 ),
@@ -480,6 +521,33 @@ fn history_notices(ctx: &Ctx) -> Vec<Notice> {
         });
     }
     out
+}
+
+/// The daemon's decision step as one pure function: observed system state +
+/// learned habits in, planned notices out. The loop gathers the inputs;
+/// tests drive this directly.
+fn plan_notices(
+    apps: &[App],
+    intents: &[(String, Intent)],
+    report: &PressureReport,
+    hist: &History,
+    habits: &Habits,
+    interval: u64,
+    sys: &SysSample,
+) -> Vec<Notice> {
+    let mut notices = oneshot_notices_at(apps, intents, report, sys.hottest_thermal);
+    notices.extend(history_notices(
+        &Ctx {
+            hist,
+            habits,
+            apps,
+            intents,
+            report,
+            interval,
+        },
+        sys,
+    ));
+    notices
 }
 
 // ---------------------------------------------------------------- loop
@@ -522,7 +590,7 @@ pub fn run_daemon(t: &Theme, interval: u64, desktop: bool) -> i32 {
             .collect();
         let report = crate::pressure::measure(250);
 
-        hist.push(&report);
+        hist.push(&report, procfs::loadavg().0);
         let ncpu = procfs::cpu_count() as f64;
         let cpu_pct = procfs::loadavg().0 / ncpu * 100.0;
         let (_, cv) = hist.load_stats();
@@ -541,15 +609,8 @@ pub fn run_daemon(t: &Theme, interval: u64, desktop: bool) -> i32 {
             habits.save();
         }
 
-        let mut notices = oneshot_notices(&apps, &intents, &report);
-        notices.extend(history_notices(&Ctx {
-            hist: &hist,
-            habits: &habits,
-            apps: &apps,
-            intents: &intents,
-            report: &report,
-            interval,
-        }));
+        let sys = SysSample::read();
+        let notices = plan_notices(&apps, &intents, &report, &hist, &habits, interval, &sys);
 
         for n in notices {
             let key = format!("{}:{}", n.valve, n.title);
