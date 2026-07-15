@@ -259,7 +259,7 @@ pub fn group_apps(mut procs: Vec<Process>, sample_ms: u64) -> Vec<App> {
             }
         })
         .collect();
-    apps.sort_by(|a, b| b.rss_kb.cmp(&a.rss_kb));
+    apps.sort_by_key(|a| std::cmp::Reverse(a.rss_kb));
     apps
 }
 

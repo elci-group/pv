@@ -164,7 +164,7 @@ impl Habits {
                 s.top.push((c.clone(), 1));
             }
         }
-        s.top.sort_by(|a, b| b.1.cmp(&a.1));
+        s.top.sort_by_key(|x| std::cmp::Reverse(x.1));
         s.top.truncate(3);
         s.samples += 1;
     }

@@ -161,9 +161,11 @@ pub fn local_hour() -> usize {
     ((secs.rem_euclid(86400)) / 3600) as usize
 }
 
+type StyleFn = fn(&Theme, &str) -> String;
+
 /// Render a notice as a rustic-cyberpunk valve card.
 pub fn render(t: &Theme, n: &Notice) -> String {
-    let (fc, title_c): (fn(&Theme, &str) -> String, fn(&Theme, &str) -> String) = match n.level {
+    let (fc, title_c): (StyleFn, StyleFn) = match n.level {
         Level::Advisory => (Theme::cyan, Theme::bold),
         Level::Warning => (Theme::yellow, Theme::bold),
         Level::Critical => (Theme::red, Theme::bold),
