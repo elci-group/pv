@@ -33,7 +33,8 @@ MODELS = [
     "qwen/qwen3.6-27b",
     "llama-3.3-70b-versatile",
     "openai/gpt-oss-120b",
-    "moonshotai/kimi-k2-instruct-0905",
+    # kimi-k2-instruct-0905 is on the pricing page but not accessible on the
+    # developer tier (model_not_found) — excluded from the measured sweep.
 ]
 REASONING = {  # models that think before answering; need token headroom
     "openai/gpt-oss-20b",
