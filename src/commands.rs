@@ -22,7 +22,11 @@ fn gather() -> State {
         .map(|a| (a.key.clone(), intent::classify(a)))
         .collect();
     let report = pressure::measure(400);
-    State { apps, intents, report }
+    State {
+        apps,
+        intents,
+        report,
+    }
 }
 
 fn find_app<'a>(apps: &'a [App], target: &str) -> Option<&'a App> {
@@ -39,12 +43,14 @@ fn find_app<'a>(apps: &'a [App], target: &str) -> Option<&'a App> {
 
 pub fn dashboard(t: &Theme) -> i32 {
     let st = gather();
-    println!("{}", t.bold("Pressure"));
+    println!("{}", t.title("PV / NOW", "live system overview"));
+    println!("{}", t.section("PRESSURE"));
     for rp in resource_lines(&st.report) {
         println!(
-            "  {:<9} {}  {}",
+            "  {:<9} {} {:>3}%  {}",
             rp.name,
             t.score_colored(rp.score),
+            rp.score,
             t.dim(&rp.detail)
         );
     }
@@ -55,15 +61,12 @@ pub fn dashboard(t: &Theme) -> i32 {
             t.bold(&fmt_eta(eta))
         );
     }
-    println!();
-
-    println!("{}", t.bold("Processes"));
+    println!("{}", t.section("WORKLOADS"));
     print_app_table(t, &st.apps, &st.intents, 12);
-    println!();
 
     let recs = recommend::recommend(&st.apps, &st.intents, &st.report);
     if !recs.is_empty() {
-        println!("{}", t.bold("Recommendations"));
+        println!("{}", t.section("RECOMMENDED NEXT STEP"));
         for r in &recs {
             let tag = match r.action {
                 recommend::Action::Suspend => t.yellow("suspend"),
@@ -72,10 +75,18 @@ pub fn dashboard(t: &Theme) -> i32 {
                 recommend::Action::Reserve => t.green("reserve"),
                 _ => t.dim("note"),
             };
-            println!("  [{}] {} {}", tag, r.display, t.dim(&format!("({}%)", r.confidence)));
+            println!(
+                "  [{}] {} {}",
+                tag,
+                r.display,
+                t.dim(&format!("({}%)", r.confidence))
+            );
         }
     } else {
-        println!("{}", t.dim("No recommendations — system is comfortable."));
+        println!(
+            "{}",
+            t.dim("  No action recommended — system is comfortable.")
+        );
     }
     0
 }
@@ -98,7 +109,9 @@ fn print_app_table(t: &Theme, apps: &[App], intents: &[(String, Intent)], limit:
         if shown >= limit {
             break;
         }
-        let Some((_, int)) = intents.iter().find(|(k, _)| k == &app.key) else { continue };
+        let Some((_, int)) = intents.iter().find(|(k, _)| k == &app.key) else {
+            continue;
+        };
         let is_susp = suspended.iter().any(|s| s.key == app.key);
         let (status, styled_status): (String, String) = if is_susp {
             ("suspended".into(), t.magenta("suspended"))
@@ -107,7 +120,10 @@ fn print_app_table(t: &Theme, apps: &[App], intents: &[(String, Intent)], limit:
         } else if app.cpu_pct < 1.0 {
             ("idle".into(), t.dim("idle"))
         } else {
-            (format!("{:.0}% cpu", app.cpu_pct), format!("{:.0}% cpu", app.cpu_pct))
+            (
+                format!("{:.0}% cpu", app.cpu_pct),
+                format!("{:.0}% cpu", app.cpu_pct),
+            )
         };
         let _ = status;
         let safe = if int.never_suspend {
@@ -143,13 +159,24 @@ pub fn ps(t: &Theme) -> i32 {
     let st = gather();
     println!(
         "{}",
+        t.title("PV / PROCESSES", "intent-aware workload view")
+    );
+    println!("{}", t.section("ACTIVE WORKLOADS"));
+    println!(
+        "{}",
         t.bold(&format!(
             "{:<18} {:<28} {:<12} {:<10} {:<8} {}",
             "APP", "INTENT", "STATE", "RSS", "PIDS", "LIFECYCLE"
         ))
     );
-    for app in st.apps.iter().filter(|a| a.rss_kb > 4_000 || a.cpu_pct > 1.0) {
-        let Some((_, int)) = st.intents.iter().find(|(k, _)| k == &app.key) else { continue };
+    for app in st
+        .apps
+        .iter()
+        .filter(|a| a.rss_kb > 4_000 || a.cpu_pct > 1.0)
+    {
+        let Some((_, int)) = st.intents.iter().find(|(k, _)| k == &app.key) else {
+            continue;
+        };
         let lifecycle: Vec<&str> = [
             (int.can_suspend && !int.never_suspend).then_some("suspend"),
             int.can_interrupt.then_some("interrupt"),
@@ -175,6 +202,10 @@ pub fn ps(t: &Theme) -> i32 {
             t.dim(&lifecycle.join(" · ")),
         );
     }
+    println!(
+        "{}",
+        t.dim("  Lifecycle is an inferred capability; inspect before acting.")
+    );
     0
 }
 
@@ -182,7 +213,14 @@ pub fn ps(t: &Theme) -> i32 {
 
 pub fn pressure(t: &Theme) -> i32 {
     let r = pressure::measure(800);
-    println!("{}", t.bold("System pressure"));
+    println!(
+        "{}",
+        t.title(
+            "PV / SYSTEM PRESSURE",
+            &format!("System pressure · overall {}", t.severity(r.overall))
+        )
+    );
+    println!("{}", t.section("RESOURCE SIGNALS"));
     for rp in resource_lines(&r) {
         println!(
             "  {:<10} {} {:>3}%  {}",
@@ -192,10 +230,15 @@ pub fn pressure(t: &Theme) -> i32 {
             t.dim(&rp.detail)
         );
     }
+    println!("{}", t.section("MEMORY TREND"));
     println!(
         "  {:<10} {}  {}",
         "Mem trend",
-        if r.mem_rate_kb_s > 0.0 { t.yellow("draining") } else { t.green("stable") },
+        if r.mem_rate_kb_s > 0.0 {
+            t.yellow("draining")
+        } else {
+            t.green("stable")
+        },
         t.dim(&format!("{:+.1} MB/s available", -r.mem_rate_kb_s / 1024.0))
     );
     if let Some(eta) = r.oom_eta_secs {
@@ -205,14 +248,15 @@ pub fn pressure(t: &Theme) -> i32 {
             t.bold(&fmt_eta(eta))
         );
     }
-    let attention = if std::env::var("DISPLAY").is_ok() || std::env::var("WAYLAND_DISPLAY").is_ok() {
+    let attention = if std::env::var("DISPLAY").is_ok() || std::env::var("WAYLAND_DISPLAY").is_ok()
+    {
         "graphical session active"
     } else if std::env::var("SSH_CONNECTION").is_ok() {
         "remote session"
     } else {
         "unknown"
     };
-    println!("  {:<10} {}", "Attention", t.dim(attention));
+    println!("  {:<10} {}", "Context", t.dim(attention));
     0
 }
 
@@ -246,7 +290,10 @@ pub fn explain(t: &Theme) -> i32 {
 
     let swap_used = r.mem.swap_total_kb.saturating_sub(r.mem.swap_free_kb);
     lines.push(if swap_used > 512_000 {
-        format!("Swap is in use ({}) — memory pressure is real.", fmt_kb(swap_used))
+        format!(
+            "Swap is in use ({}) — memory pressure is real.",
+            fmt_kb(swap_used)
+        )
     } else {
         "No meaningful swap pressure.".into()
     });
@@ -263,8 +310,10 @@ pub fn explain(t: &Theme) -> i32 {
         lines.push("No action needed.".into());
     }
 
+    println!("{}", t.title("PV / EXPLAIN", "plain-language assessment"));
+    println!("{}", t.section("WHAT MATTERS"));
     for l in lines {
-        println!("{l}");
+        println!("  • {l}");
     }
     let _ = t;
     0
@@ -279,7 +328,12 @@ pub fn intent(t: &Theme, cmd: &[String]) -> i32 {
     }
     let i = intent::classify_command(&cmd.join(" "));
     let yn = |b: bool| if b { t.green("yes") } else { t.dim("no") };
-    println!("{} {}", t.bold("Task:"), i.task);
+    println!(
+        "{}",
+        t.title("PV / INTENT", "classification only — command was not run")
+    );
+    println!("{}", t.section("LIFECYCLE PROFILE"));
+    println!("  {} {}", t.bold("Task"), i.task);
     println!("  Category:             {:?}", i.category);
     println!("  Interactive:          {}", yn(i.interactive));
     println!("  Can survive interrupt: {}", yn(i.can_interrupt));
@@ -343,12 +397,24 @@ pub fn run(t: &Theme, cmd: &[String], remote: Option<String>) -> i32 {
 pub fn sessions(t: &Theme) -> i32 {
     let sessions = session::list();
     if sessions.is_empty() {
-        println!("{}", t.dim("No pv sessions. Start one with `pv run -- <cmd>`."));
+        println!(
+            "{}",
+            t.dim("No pv sessions. Start one with `pv run -- <cmd>`.")
+        );
         return 0;
     }
+    println!(
+        "{}",
+        t.title("PV / SESSIONS", "detached work that survives terminal loss")
+    );
+    println!("{}", t.section("CONTINUITY"));
     for s in sessions {
         let alive = session::is_alive(&s);
-        let status = if alive { t.green("running") } else { t.dim("finished") };
+        let status = if alive {
+            t.green("running")
+        } else {
+            t.dim("finished")
+        };
         let last = session::tail(&s, 1).pop().unwrap_or_default();
         println!(
             "  {} {:<10} {:<24} {}",
@@ -369,12 +435,7 @@ pub fn attach(t: &Theme, id: &str) -> i32 {
         eprintln!("no session matching '{id}'");
         return 1;
     };
-    println!(
-        "{} {} — {}",
-        t.bold("Attaching to"),
-        s.id,
-        s.cmd.join(" ")
-    );
+    println!("{} {} — {}", t.bold("Attaching to"), s.id, s.cmd.join(" "));
     match session::follow(&s) {
         Ok(()) => 0,
         Err(e) => {
@@ -540,7 +601,12 @@ pub fn policy(t: &Theme, apply: bool, init: bool) -> i32 {
             "throttle" => t.magenta("throttle"),
             _ => t.cyan("notify"),
         };
-        println!("  [{}] {} {}", tag, h.message, t.dim(&format!("({})", h.rule)));
+        println!(
+            "  [{}] {} {}",
+            tag,
+            h.message,
+            t.dim(&format!("({})", h.rule))
+        );
         if apply {
             match h.action.as_str() {
                 "suspend" => {
@@ -548,7 +614,13 @@ pub fn policy(t: &Theme, apply: bool, init: bool) -> i32 {
                     let int = app.map(intent::classify);
                     if let (Some(app), Some(int)) = (app, int) {
                         if int.can_suspend && !int.never_suspend {
-                            match suspend::suspend(&app.key, &app.display, &app.pids, app.rss_kb, &int.task) {
+                            match suspend::suspend(
+                                &app.key,
+                                &app.display,
+                                &app.pids,
+                                app.rss_kb,
+                                &int.task,
+                            ) {
                                 Ok(_) => println!("    {}", t.green("applied")),
                                 Err(e) => println!("    {}", t.red(&e)),
                             }
@@ -611,7 +683,11 @@ pub fn hosts(t: &Theme, init: bool) -> i32 {
     }
     for (name, h) in hosts {
         let up = migrate::online(&h.addr);
-        let status = if up { t.green("online") } else { t.dim("offline") };
+        let status = if up {
+            t.green("online")
+        } else {
+            t.dim("offline")
+        };
         let probe = if up {
             migrate::probe(&h.addr).unwrap_or_default()
         } else {
@@ -692,7 +768,11 @@ pub fn migrate(t: &Theme, target: &str, to: Option<String>) -> i32 {
             t.red("refusing:"),
             app.display,
             int.task,
-            if int.detail.is_empty() { "state lives locally" } else { &int.detail }
+            if int.detail.is_empty() {
+                "state lives locally"
+            } else {
+                &int.detail
+            }
         );
         return 1;
     }
@@ -706,12 +786,12 @@ pub fn migrate(t: &Theme, target: &str, to: Option<String>) -> i32 {
     }
     println!(
         "[pv] migrating {} ({}) from {} → {}",
-        app.display,
-        int.task,
-        cwd,
-        host.addr
+        app.display, int.task, cwd, host.addr
     );
-    println!("{}", t.dim("note: local process keeps running; kill it when the remote run is going"));
+    println!(
+        "{}",
+        t.dim("note: local process keeps running; kill it when the remote run is going")
+    );
     match migrate::migrate_command(&host, &cmd, &cwd) {
         Ok(()) => 0,
         Err(e) => {

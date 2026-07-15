@@ -37,7 +37,9 @@ pub struct Cooldowns {
 
 impl Cooldowns {
     pub fn new() -> Self {
-        Cooldowns { map: std::collections::HashMap::new() }
+        Cooldowns {
+            map: std::collections::HashMap::new(),
+        }
     }
     pub fn allow(&mut self, key: &str, level: Level) -> bool {
         let now = std::time::Instant::now();
@@ -88,7 +90,36 @@ fn chars(s: &str) -> usize {
 }
 
 fn fill(c: char, n: usize) -> String {
-    std::iter::repeat(c).take(n).collect()
+    std::iter::repeat_n(c, n).collect()
+}
+
+/// Split a human-facing line to the card width without cutting Unicode text.
+fn wrap(s: &str, width: usize) -> Vec<String> {
+    if s.chars().count() <= width {
+        return vec![s.to_string()];
+    }
+    let mut out = Vec::new();
+    let mut line = String::new();
+    for word in s.split_whitespace() {
+        let next = if line.is_empty() {
+            word.len()
+        } else {
+            line.chars().count() + 1 + word.chars().count()
+        };
+        if next > width && !line.is_empty() {
+            out.push(line);
+            line = word.to_string();
+        } else {
+            if !line.is_empty() {
+                line.push(' ');
+            }
+            line.push_str(word);
+        }
+    }
+    if !line.is_empty() {
+        out.push(line);
+    }
+    out
 }
 
 /// Local wall-clock "HH:MM:SS" without a chrono dependency.
@@ -118,12 +149,7 @@ pub fn local_hms() -> String {
         .unwrap_or(0)
         + tz_offset();
     let day = secs.rem_euclid(86400);
-    format!(
-        "{:02}:{:02}:{:02}",
-        day / 3600,
-        (day % 3600) / 60,
-        day % 60
-    )
+    format!("{:02}:{:02}:{:02}", day / 3600, (day % 3600) / 60, day % 60)
 }
 
 pub fn local_hour() -> usize {
@@ -181,26 +207,43 @@ pub fn render(t: &Theme, n: &Notice) -> String {
     if let Some((label, score)) = &n.gauge {
         let bar_plain = gauge_bar(*score);
         let bar_colored = if t.enabled {
-            let code = if *score >= 75 { "31" } else if *score >= 45 { "33" } else { "32" };
+            let code = if *score >= 75 {
+                "31"
+            } else if *score >= 45 {
+                "33"
+            } else {
+                "32"
+            };
             t.paint(code, &bar_plain)
         } else {
             bar_plain.clone()
         };
         let vis = format!("{label} {bar_plain} {score}%");
-        out.push(frame(format!("{label} {bar_colored} {score}%"), chars(&vis)));
+        out.push(frame(
+            format!("{label} {bar_colored} {score}%"),
+            chars(&vis),
+        ));
     }
     out.push(frame(String::new(), 0));
 
-    // observations
+    // observations; long paths and commands stay inside the valve card.
     for o in &n.obs {
-        out.push(frame(t.dim(o), chars(o)));
+        for line in wrap(o, W) {
+            out.push(frame(t.dim(&line), chars(&line)));
+        }
     }
 
     // suggestion
     if let Some(s) = &n.suggest {
         out.push(frame(String::new(), 0));
-        let line = format!("› {s}");
-        out.push(frame(title_c(t, &line), chars(&line)));
+        for (index, line) in wrap(s, W.saturating_sub(2)).into_iter().enumerate() {
+            let line = if index == 0 {
+                format!("› {line}")
+            } else {
+                format!("  {line}")
+            };
+            out.push(frame(title_c(t, &line), chars(&line)));
+        }
     }
 
     // footer
