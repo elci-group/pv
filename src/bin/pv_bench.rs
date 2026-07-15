@@ -248,12 +248,7 @@ fn simulate(m: &Model, w: &Workload, arch: Arch) -> Outcome {
     let cost_hr = calls_hr * (w.ctx_in as f64 * m.price_in + out_tokens * m.price_out) / 1e6;
     let cost_day = cost_hr * w.active_hr_day;
 
-    let fit = if m.tier >= w.req_tier {
-        1.0
-    } else {
-        (1.0 - TIER_PENALTY * (w.req_tier - m.tier)).max(0.2)
-    };
-    let accuracy = (m.quality * fit).min(97.0);
+    let accuracy = accuracy_at(m, w.req_tier);
 
     let fresh_score = if staleness_s <= w.freshness_need_s {
         1.0
