@@ -36,6 +36,41 @@ pub fn have_curl() -> bool {
         .unwrap_or(false)
 }
 
+/// Curl config file carrying the Authorization header; the file is removed
+/// when this guard drops. Keeps the bearer token out of curl's argv, which is
+/// world-readable via /proc/<pid>/cmdline for the life of the process.
+struct CurlConfig(std::path::PathBuf);
+
+impl Drop for CurlConfig {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+/// Write `header = "Authorization: Bearer <key>"` to a fresh 0600 file under
+/// the pv state dir, for curl's `-K`. Refuses keys containing characters that
+/// could break out of the quoted config value.
+fn write_curl_config(key: &str) -> Result<CurlConfig, String> {
+    if key.contains('"') || key.contains('\n') || key.contains('\r') {
+        return Err("API key contains characters unsafe for a curl config file".into());
+    }
+    use std::os::unix::fs::OpenOptionsExt;
+    let dir = crate::procfs::xdg("XDG_DATA_HOME", ".local/share").join("pv");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
+    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let path = dir.join(format!("curl-{}-{seq}.conf", std::process::id()));
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&path)
+        .map_err(|e| format!("create {}: {e}", path.display()))?;
+    writeln!(f, "header = \"Authorization: Bearer {key}\"")
+        .map_err(|e| format!("write {}: {e}", path.display()))?;
+    Ok(CurlConfig(path))
+}
+
 /// Spawn a streaming chat completion. Events arrive on the returned channel.
 pub fn stream(model: &str, system: &str, user: &str, key: &str) -> Receiver<GroqEvent> {
     let (tx, rx) = channel();
@@ -47,11 +82,20 @@ pub fn stream(model: &str, system: &str, user: &str, key: &str) -> Receiver<Groq
     );
     std::thread::spawn(move || {
         let payload = build_payload(&model, &system, &user);
+        // guard: config file is deleted on every return path below
+        let config = match write_curl_config(&key) {
+            Ok(c) => c,
+            Err(e) => {
+                let _ = tx.send(GroqEvent::Error(format!("curl config: {e}")));
+                return;
+            }
+        };
+        let config_path = config.0.to_string_lossy().into_owned();
         let spawned = Command::new("curl")
             .args([
                 "-sN",
                 "-X", "POST", URL,
-                "-H", &format!("Authorization: Bearer {key}"),
+                "-K", &config_path,
                 "-H", "Content-Type: application/json",
                 "--data-binary", "@-",
                 "--max-time", "30",
@@ -215,5 +259,26 @@ mod tests {
         let p = build_payload("m", "sys \"quoted\"", "user\nline");
         assert!(p.contains("sys \\\"quoted\\\""));
         assert!(p.contains("user\\nline"));
+    }
+
+    #[test]
+    fn curl_config_is_0600_and_carries_header() {
+        let cfg = write_curl_config("gsk_test123").expect("config");
+        let path = cfg.0.clone();
+        assert!(path.starts_with(crate::procfs::xdg("XDG_DATA_HOME", ".local/share").join("pv")));
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(&path).expect("metadata").permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+        let body = std::fs::read_to_string(&path).expect("read");
+        assert_eq!(body, "header = \"Authorization: Bearer gsk_test123\"\n");
+        drop(cfg);
+        assert!(!path.exists(), "config file removed on drop");
+    }
+
+    #[test]
+    fn curl_config_rejects_unsafe_keys() {
+        assert!(write_curl_config("bad\"key").is_err());
+        assert!(write_curl_config("bad\nkey").is_err());
+        assert!(write_curl_config("bad\rkey").is_err());
     }
 }

@@ -132,7 +132,8 @@ pub fn evaluate(rules: &[Rule], apps: &[App], categories: &[(String, Category)],
                 }
             }
             if let Some(min) = rule.min_rss_mb {
-                if app.rss_kb < min * 1024 {
+                // saturating: a pathological min_rss_mb must skip the rule, not overflow
+                if app.rss_kb < min.saturating_mul(1024) {
                     continue;
                 }
             }

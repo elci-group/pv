@@ -49,7 +49,8 @@ impl History {
     /// Slope of memory used in kB/s over the window (positive = growing).
     fn mem_slope_kb_s(&self, interval_secs: u64) -> f64 {
         let n = self.mem_used_kb.len();
-        if n < 2 {
+        // interval_secs == 0 would divide by zero — report no trend instead
+        if n < 2 || interval_secs == 0 {
             return 0.0;
         }
         let first = self.mem_used_kb.front().copied().unwrap_or(0) as f64;

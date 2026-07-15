@@ -3,8 +3,24 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::sync::OnceLock;
 
-pub const TICKS_PER_SEC: f64 = 100.0; // USER_HZ on virtually all Linux systems
+/// Clock ticks per second (USER_HZ), probed once via `getconf CLK_TCK`.
+/// Falls back to 100.0, the value on virtually all Linux systems.
+pub fn ticks_per_sec() -> f64 {
+    static TPS: OnceLock<f64> = OnceLock::new();
+    *TPS.get_or_init(|| {
+        std::process::Command::new("getconf")
+            .arg("CLK_TCK")
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .and_then(|s| s.trim().parse::<f64>().ok())
+            .filter(|&v| v > 0.0)
+            .unwrap_or(100.0)
+    })
+}
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // full /proc record; not every field is rendered yet
@@ -17,6 +33,7 @@ pub struct Process {
     pub comm: String,
     pub exe: String,      // basename of executable
     pub cmdline: String,  // full command line, space-joined
+    pub argv: Vec<String>, // raw argv, NUL-separated in /proc
     pub uid: u32,
     pub rss_kb: u64,
     pub threads: u32,
@@ -47,6 +64,7 @@ pub struct App {
     pub tty: bool,
     pub has_audio: bool,
     pub cmdline: String,      // representative cmdline (leader's)
+    pub argv: Vec<String>,    // leader's raw argv
     pub age_secs: f64,
     pub kernel: bool,
 }
@@ -106,12 +124,12 @@ pub fn read_process(pid: u32, uptime: f64) -> Option<Process> {
 
     let cmdline_raw = fs::read(format!("/proc/{pid}/cmdline")).unwrap_or_default();
     let kernel_thread = cmdline_raw.is_empty();
-    let cmdline = cmdline_raw
+    let argv: Vec<String> = cmdline_raw
         .split(|&b| b == 0)
         .filter(|s| !s.is_empty())
         .map(|s| String::from_utf8_lossy(s).into_owned())
-        .collect::<Vec<_>>()
-        .join(" ");
+        .collect();
+    let cmdline = argv.join(" ");
 
     let mut uid = 0u32;
     let mut rss_kb = 0u64;
@@ -154,12 +172,13 @@ pub fn read_process(pid: u32, uptime: f64) -> Option<Process> {
         comm,
         exe,
         cmdline,
+        argv,
         uid,
         rss_kb,
         threads,
         utime,
         stime,
-        age_secs: (uptime - starttime as f64 / TICKS_PER_SEC).max(0.0),
+        age_secs: (uptime - starttime as f64 / ticks_per_sec()).max(0.0),
         has_audio,
         kernel_thread,
     })
@@ -205,7 +224,7 @@ pub fn group_apps(mut procs: Vec<Process>, sample_ms: u64) -> Vec<App> {
             let rss_kb = members.iter().map(|m| m.rss_kb).sum();
             let cpu_pct: f64 = members
                 .iter()
-                .map(|m| m.utime as f64 / TICKS_PER_SEC / secs * 100.0)
+                .map(|m| m.utime as f64 / ticks_per_sec() / secs * 100.0)
                 .sum();
             let leader = members
                 .iter()
@@ -234,6 +253,7 @@ pub fn group_apps(mut procs: Vec<Process>, sample_ms: u64) -> Vec<App> {
                 tty: members.iter().any(|m| m.tty),
                 has_audio: members.iter().any(|m| m.has_audio),
                 cmdline: leader.cmdline.clone(),
+                argv: leader.argv.clone(),
                 age_secs: leader.age_secs,
                 kernel: false,
             }

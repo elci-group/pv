@@ -68,13 +68,17 @@ Follow a session's output; exits when the session ends.
 .BI "pv suspend " target
 Gracefully freeze an app (by name or pid): sync, SIGSTOP, record state.
 Protected intents (ssh, runtimes, databases, package operations) are
-refused unless \fB--force\fR.
+refused unless \fB--force\fR. Apps group by executable name, so suspending
+a name freezes every matching process at once. If recording fails, all
+stopped processes are thawed again.
 .TP
 .BI "pv resume " target
-Thaw a suspended app.
+Thaw a suspended app. Each recorded PID's start time is re-verified before
+signalling, so a recycled PID is never signalled by mistake.
 .TP
 .BI "pv kill " target
-Terminate a suspended app (thaw, then SIGTERM).
+Terminate a suspended app (thaw, then SIGTERM, with the same start-time
+verification).
 .TP
 .B pv suspended
 List suspended apps with held memory and freeze age.

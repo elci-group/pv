@@ -110,7 +110,7 @@ enum Cmd {
     /// Run the observation daemon: learns habits, vents valve notifications
     Daemon {
         /// Seconds between observations
-        #[arg(long, default_value_t = 5)]
+        #[arg(long, default_value_t = 5, value_parser = clap::value_parser!(u64).range(1..))]
         interval: u64,
         /// Also fire desktop notifications via notify-send
         #[arg(long)]

@@ -119,6 +119,13 @@ terminal can close — the session survives. `pv sessions` lists them,
 Graceful suspension: syncs filesystem buffers, freezes the whole app with
 SIGSTOP, records what it holds. Protected intents (ssh sessions, container
 runtimes, package operations, databases) are refused unless `--force`.
+Suspended records store each PID's start time, which is re-verified before
+every signal, so a recycled PID is never resumed or killed by mistake; if
+recording the suspension fails, every stopped process is thawed again.
+
+Apps are grouped by executable name — that is the deliberate app-oriented
+model, but mind the blast radius: `pv suspend ffmpeg` freezes *every*
+ffmpeg on the machine, not one chosen job.
 
 ```
 $ pv suspend firefox
@@ -196,8 +203,10 @@ when the repo has no releases yet, it falls back to a source build
 (`git clone --depth 1` → `cargo build --release` → install). The install
 target is `~/.local/bin` by default — or `/usr/local/bin` when `--system` is
 given or pv already runs from there. The swap is atomic (rename), so
-updating a running pv is safe. Releases ship a single asset named
-`pv-linux-x86_64`.
+updating a running pv is safe. Releases ship the binary as
+`pv-linux-x86_64` plus a `SHA256SUMS` asset; the updater selects the binary
+by name, verifies its sha256 against the sums, and refuses to install an
+unverified binary.
 
 ### `pv daemon` / `pv notify` — the valve board
 

@@ -764,12 +764,132 @@ fn safe_max_temp(row: &TempRow) -> f64 {
     safe
 }
 
+// ---------------------------------------------------------------------------
+// Temperature artifact cross-check
+// ---------------------------------------------------------------------------
+//
+// TEMP_SWEEP is hand-copied from bench/temperature.json; --check recomputes
+// pass/agree per (model, temp) from that artifact so the const cannot
+// silently drift. Deliberately small scanner for the known temp_probe.py
+// output shape ("cells" -> model -> temp -> probe -> {"pass", "answers"}) —
+// it validates a known artifact, it is not a general JSON parser.
+
+/// `needle`'s byte index in `hay` at or after `from`.
+fn scan_from(hay: &str, needle: &str, from: usize) -> Option<usize> {
+    hay.get(from..)?.find(needle).map(|i| from + i)
+}
+
+/// Integer right after the key at `at` (`"pass": 5` — colon/space separated).
+fn scan_u64_after(text: &str, at: usize, key: &str) -> Option<u64> {
+    let rest = text.get(at + key.len()..)?;
+    let rest = rest.trim_start_matches(|c: char| c == ':' || c.is_ascii_whitespace());
+    let len = rest.bytes().take_while(|b| b.is_ascii_digit()).count();
+    if len == 0 {
+        return None;
+    }
+    rest.get(..len)?.parse().ok()
+}
+
+/// Quoted strings of the `"answers": [...]` array starting at `at`.
+/// Answers are canonical tokens — they never contain quotes or brackets.
+fn scan_answers(text: &str, at: usize) -> Option<Vec<String>> {
+    let rest = text.get(at + "\"answers\"".len()..)?;
+    let open = rest.find('[')?;
+    let inner = rest.get(open + 1..)?;
+    let inner = inner.get(..inner.find(']')?)?;
+    Some(inner.split('"').skip(1).step_by(2).map(str::to_string).collect())
+}
+
+/// (pass fraction, agreement) of one (model, temp) cell: 3 probes in artifact
+/// order, pass = sum of probe passes / total answers, agree = mean per-probe
+/// mode share — mirrors temp_probe.py's --report.
+fn measured_cell(ttext: &str) -> Option<(f64, f64)> {
+    let mut passes = 0u64;
+    let mut total = 0u64;
+    let mut shares = Vec::new();
+    let mut at = 0usize;
+    for _ in 0..3 {
+        at = scan_from(ttext, "\"pass\"", at)?;
+        passes += scan_u64_after(ttext, at, "\"pass\"")?;
+        at = scan_from(ttext, "\"answers\"", at)?;
+        let answers = scan_answers(ttext, at)?;
+        if answers.is_empty() {
+            return None;
+        }
+        total += answers.len() as u64;
+        let mut mode = 0usize;
+        for a in &answers {
+            mode = mode.max(answers.iter().filter(|b| *b == a).count());
+        }
+        shares.push(mode as f64 / answers.len() as f64);
+        at += "\"answers\"".len();
+    }
+    if total == 0 {
+        return None;
+    }
+    Some((passes as f64 / total as f64, shares.iter().sum::<f64>() / shares.len() as f64))
+}
+
+/// Recompute every TEMP_SWEEP cell from the measured artifact and require
+/// agreement within 0.01 (the const rounds to 2 decimals).
+fn temp_artifact_check() -> Result<(), String> {
+    const PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/bench/temperature.json");
+    let text = std::fs::read_to_string(PATH)
+        .map_err(|e| format!("temperature artifact {PATH} unreadable: {e}"))?;
+    for row in TEMP_SWEEP {
+        let mkey = format!("\"{}\"", row.model);
+        let mstart = scan_from(&text, &mkey, 0).ok_or_else(|| {
+            format!("temperature artifact: model {} missing from {PATH}", row.model)
+        })?;
+        // the model's section ends where the next model key begins
+        let mend = TEMP_SWEEP
+            .iter()
+            .filter_map(|r| scan_from(&text, &format!("\"{}\"", r.model), mstart + mkey.len()))
+            .min()
+            .unwrap_or(text.len());
+        let mtext = text.get(mstart..mend).ok_or("temperature artifact: bad slice")?;
+        for (ti, temp) in TEMPS.iter().enumerate() {
+            // Python str(float) == Rust {:?} here: "0.0", "0.2", "1.0", ...
+            let tkey = format!("\"{temp:?}\":");
+            let tstart = scan_from(mtext, &tkey, 0).ok_or_else(|| {
+                format!("temperature artifact: {} @ {temp:?} missing", row.model)
+            })?;
+            let tend = TEMPS[ti + 1..]
+                .iter()
+                .filter_map(|t| scan_from(mtext, &format!("\"{t:?}\":"), tstart + tkey.len()))
+                .min()
+                .unwrap_or(mtext.len());
+            let ttext = mtext.get(tstart..tend).ok_or("temperature artifact: bad slice")?;
+            let (got_pass, got_agree) = measured_cell(ttext).ok_or_else(|| {
+                format!("temperature artifact: {} @ {temp:?} unparsable", row.model)
+            })?;
+            let (want_pass, want_agree, _) = row.cells[ti];
+            if (got_pass - want_pass).abs() > 0.01 {
+                return Err(format!(
+                    "{} @ {temp:?}: TEMP_SWEEP pass {want_pass:.2} != artifact {got_pass:.2} — refresh the const from bench/temperature.json",
+                    row.model
+                ));
+            }
+            if (got_agree - want_agree).abs() > 0.01 {
+                return Err(format!(
+                    "{} @ {temp:?}: TEMP_SWEEP agree {want_agree:.2} != artifact {got_agree:.2} — refresh the const from bench/temperature.json",
+                    row.model
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 fn temp_section(s: &mut String, md: bool) {
     h1(s, "Inference temperature (measured — 630 real API calls, 2026-07-15)", md);
     let _ = writeln!(s, "3 deterministically-graded supervisor probes (JSON action emission, enum");
     let _ = writeln!(s, "action selection, capacity arithmetic) x 5 identical reps x 6 temperatures.");
     let _ = writeln!(s, "pass = correctness vs exact rules, agree = self-agreement across reps.");
-    let _ = writeln!(s, "kimi-k2-0905 excluded: gated off the developer tier (model_not_found).\n");
+    let _ = writeln!(s, "kimi-k2-0905 excluded: gated off the developer tier (model_not_found).");
+    let _ = writeln!(s, "caveats: n=5 reps per cell gives pass a resolution of ~0.07; trials were");
+    let _ = writeln!(s, "interleaved round-robin across temperatures; argmax selection overstates");
+    let _ = writeln!(s, "certainty, so ties resolve toward the lower temperature.\n");
 
     if md {
         let _ = writeln!(s, "| model | 0.0 | 0.2 | 0.5 | 0.8 | 1.0 | 1.5 | ideal | safe ≤ | tok/call |");
@@ -992,6 +1112,8 @@ fn check() -> Result<(), String> {
     if strong < 5 {
         return Err("under 5 models pass >= 0.9 at their ideal temp".into());
     }
+    // the hand-copied const must match the measured artifact it came from
+    temp_artifact_check()?;
     Ok(())
 }
 

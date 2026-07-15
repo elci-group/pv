@@ -81,17 +81,16 @@ pub fn migrate_command(host: &Host, cmd: &[String], cwd: &str) -> Result<(), Str
             return Err(format!("`{tool}` not found — install it to enable migration"));
         }
     }
-    let job = format!(
-        "pv-{}",
-        cmd.first()
-            .map(|c| {
-                std::path::Path::new(c)
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| "job".into())
-            })
-            .unwrap_or_else(|| "job".into())
-    );
+    let raw_name = cmd
+        .first()
+        .map(|c| {
+            std::path::Path::new(c)
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "job".into())
+        })
+        .unwrap_or_else(|| "job".into());
+    let job = format!("pv-{}", sanitize_job(&raw_name));
     let remote_dir = format!("~/.pv/migrated/{job}");
 
     println!("[pv] syncing {cwd} → {}:{remote_dir}", host.addr);
@@ -112,7 +111,7 @@ pub fn migrate_command(host: &Host, cmd: &[String], cwd: &str) -> Result<(), Str
     let st = Command::new("ssh")
         .args([
             &host.addr.clone(),
-            &format!("cd {remote_dir} && {}", shell_join(cmd)),
+            &format!("cd {} && {}", shell_join(std::slice::from_ref(&remote_dir)), shell_join(cmd)),
         ])
         .status()
         .map_err(|e| e.to_string())?;
@@ -124,10 +123,22 @@ pub fn migrate_command(host: &Host, cmd: &[String], cwd: &str) -> Result<(), Str
     }
 }
 
+/// Reduce an executable basename to [A-Za-z0-9._-] so it is safe to embed
+/// in the remote dir name and the remote shell command.
+fn sanitize_job(name: &str) -> String {
+    let out: String = name
+        .chars()
+        .take(40)
+        .map(|c| if c.is_ascii_alphanumeric() || ".-_".contains(c) { c } else { '-' })
+        .collect();
+    if out.is_empty() { "job".into() } else { out }
+}
+
 fn shell_join(cmd: &[String]) -> String {
     cmd.iter()
         .map(|a| {
-            if a.chars().all(|c| c.is_alphanumeric() || "-._/=+:,".contains(c)) {
+            // `~` is safe unquoted: it can only trigger home-dir expansion
+            if a.chars().all(|c| c.is_alphanumeric() || "-._/=+:,~".contains(c)) {
                 a.clone()
             } else {
                 format!("'{}'", a.replace('\'', "'\\''"))
@@ -135,4 +146,34 @@ fn shell_join(cmd: &[String]) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_job_strips_shell_metachars() {
+        assert_eq!(sanitize_job("x'; cmd #"), "x---cmd--");
+        assert_eq!(sanitize_job("cargo"), "cargo");
+        assert_eq!(sanitize_job("a/b\0c"), "a-b-c");
+        assert_eq!(sanitize_job(""), "job");
+        assert_eq!(sanitize_job("ünïcode"), "-n-code");
+        assert_eq!(sanitize_job(&"a".repeat(100)), "a".repeat(40));
+    }
+
+    #[test]
+    fn shell_join_quotes_unsafe_args() {
+        assert_eq!(shell_join(&["ls".into(), "-la".into()]), "ls -la");
+        // sanitized remote dir keeps `~/` unquoted so the tilde still expands
+        assert_eq!(
+            shell_join(&["~/.pv/migrated/pv-x---cmd--".into()]),
+            "~/.pv/migrated/pv-x---cmd--"
+        );
+        // anything unsafe is single-quoted, so it cannot inject commands
+        assert_eq!(
+            shell_join(&["~/.pv/migrated/pv-x'; rm -rf / #".into()]),
+            "'~/.pv/migrated/pv-x'\\''; rm -rf / #'"
+        );
+    }
 }

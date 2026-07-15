@@ -13,7 +13,9 @@ from an existing temperature.json without touching the network.
 `--smoke` runs a 6-call sanity pass.
 
 Key resolution mirrors pv: $GROQ_API_KEY, then ~/.config/pv/groq_api_key.
-The key is never printed or written to disk.
+The key is never printed and never appears in argv (/proc/<pid>/cmdline is
+world-readable while curl runs); curl reads it from a 0600 temp config file
+(-K) that is deleted after each call.
 """
 
 import json
@@ -21,6 +23,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from collections import Counter
 from pathlib import Path
@@ -133,28 +136,38 @@ def call(key, model, temp, probe):
             {"role": "user", "content": probe["user"]},
         ],
     })
-    for attempt in (1, 2):
-        r = subprocess.run(
-            ["curl", "-sS", "-m", "45", "-X", "POST",
-             "https://api.groq.com/openai/v1/chat/completions",
-             "-H", f"Authorization: Bearer {key}",
-             "-H", "Content-Type: application/json",
-             "--data-binary", "@-"],
-            input=payload, capture_output=True, text=True)
-        try:
-            d = json.loads(r.stdout)
-        except Exception:
-            d = {}
-        choices = d.get("choices")
-        if choices:
-            msg = choices[0].get("message", {})
-            text = msg.get("content") or ""
-            tokens = d.get("usage", {}).get("completion_tokens", 0)
-            return text, tokens, None
-        err = json.dumps(d)[:140] if d else (r.stderr.strip()[:140] or "empty response")
-        if attempt == 1:
-            time.sleep(6)
-    return None, 0, err
+    if '"' in key or "\n" in key or "\r" in key:
+        return None, 0, "API key contains characters unsafe for a curl config file"
+    # mkstemp creates the file 0600; curl reads the bearer token from it
+    # instead of argv, and it is deleted in the finally below
+    fd, cfg = tempfile.mkstemp(prefix="pv-curl-", text=True)
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(f'header = "Authorization: Bearer {key}"\n')
+        for attempt in (1, 2):
+            r = subprocess.run(
+                ["curl", "-sS", "-m", "45", "-X", "POST",
+                 "https://api.groq.com/openai/v1/chat/completions",
+                 "-K", cfg,
+                 "-H", "Content-Type: application/json",
+                 "--data-binary", "@-"],
+                input=payload, capture_output=True, text=True)
+            try:
+                d = json.loads(r.stdout)
+            except Exception:
+                d = {}
+            choices = d.get("choices")
+            if choices:
+                msg = choices[0].get("message", {})
+                text = msg.get("content") or ""
+                tokens = d.get("usage", {}).get("completion_tokens", 0)
+                return text, tokens, None
+            err = json.dumps(d)[:140] if d else (r.stderr.strip()[:140] or "empty response")
+            if attempt == 1:
+                time.sleep(6)
+        return None, 0, err
+    finally:
+        os.unlink(cfg)
 
 
 def run(smoke=False):
@@ -171,32 +184,32 @@ def run(smoke=False):
     total = len(models) * len(temps) * len(PROBES) * reps
     done = 0
     for model in models:
-        cells = {}
-        for temp in temps:
-            tcell = {}
-            for probe in PROBES:
-                answers, passes, tokens, errs = [], 0, [], 0
-                for _ in range(reps):
+        cells = {str(t): {p["id"]: {"pass": 0, "answers": [], "tokens": [], "errors": 0}
+                          for p in PROBES} for t in temps}
+        # round-robin: rep r of every (temp, probe) before rep r+1, so each
+        # temperature samples the whole run window; all reps of one temp
+        # back-to-back would confound temperature with time-varying API load
+        for _ in range(reps):
+            for temp in temps:
+                for probe in PROBES:
+                    cell = cells[str(temp)][probe["id"]]
                     text, tok, err = call(key, model, temp, probe)
                     done += 1
                     if err:
-                        errs += 1
-                        answers.append("error")
+                        cell["errors"] += 1
+                        cell["answers"].append("error")
                     else:
                         canon, ok = probe["grade"](text)
-                        answers.append(canon)
-                        passes += 1 if ok else 0
-                        tokens.append(tok)
+                        cell["answers"].append(canon)
+                        cell["pass"] += 1 if ok else 0
+                        cell["tokens"].append(tok)
                     if done % 25 == 0:
                         print(f"  {done}/{total} calls", flush=True)
                     time.sleep(0.1)
-                tcell[probe["id"]] = {
-                    "pass": passes,
-                    "answers": answers,
-                    "tokens": round(sum(tokens) / len(tokens)) if tokens else 0,
-                    "errors": errs,
-                }
-            cells[str(temp)] = tcell
+        for tcell in cells.values():
+            for cell in tcell.values():
+                toks = cell["tokens"]
+                cell["tokens"] = round(sum(toks) / len(toks)) if toks else 0
         data["cells"][model] = cells
         print(f"done {model}", flush=True)
     OUT.write_text(json.dumps(data, indent=1))
@@ -224,10 +237,15 @@ def report():
             a = sum(agrees) / len(agrees)
             score = p * a
             mark = ""
+            # strict > while scanning temps low->high: exact score ties
+            # resolve toward the lower temperature (stated in the note below)
             if score > best:
                 best, best_t = score, t
             print(f"  {t:>4}  {p:>5.2f}  {a:>5.2f}  {sum(toks)/len(toks):>8.0f}{mark}")
-        print(f"  -> ideal temp: {best_t} (score {best:.2f})\n")
+        res = 1 / (data["reps"] * len(data["probes"]))
+        print(f"  -> ideal temp: {best_t} (score {best:.2f})")
+        print(f"     uncertainty: {data['reps']} reps/cell -> pass-rate resolution ~{res:.2f};")
+        print(f"     argmax overstates certainty — ties resolve toward the lower temperature\n")
 
 
 if __name__ == "__main__":

@@ -42,6 +42,9 @@ cba = 0.45*acc + 0.25*stability + 0.15*freshness + 0.15*cost (ref $0.50/day)
 action selection, capacity arithmetic) x 5 identical reps x 6 temperatures.
 pass = correctness vs exact rules, agree = self-agreement across reps.
 kimi-k2-0905 excluded: gated off the developer tier (model_not_found).
+caveats: n=5 reps per cell gives pass a resolution of ~0.07; trials were
+interleaved round-robin across temperatures; argmax selection overstates
+certainty, so ties resolve toward the lower temperature.
 
 | model | 0.0 | 0.2 | 0.5 | 0.8 | 1.0 | 1.5 | ideal | safe ≤ | tok/call |
 |-------|----:|----:|----:|----:|----:|----:|------:|-------:|---------:|

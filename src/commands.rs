@@ -735,7 +735,12 @@ pub fn migrate(t: &Theme, target: &str, to: Option<String>) -> i32 {
     let cwd = std::fs::read_link(format!("/proc/{}/cwd", app.leader))
         .map(|p| p.to_string_lossy().into_owned())
         .unwrap_or_else(|_| ".".into());
-    let cmd: Vec<String> = app.cmdline.split_whitespace().map(String::from).collect();
+    let cmd: Vec<String> = if app.argv.is_empty() {
+        // fall back to the display string when raw argv is unavailable
+        app.cmdline.split_whitespace().map(String::from).collect()
+    } else {
+        app.argv.clone()
+    };
     if cmd.is_empty() {
         eprintln!("cannot reconstruct command line for {}", app.display);
         return 1;
@@ -761,6 +766,21 @@ fn truncate(s: &str, n: usize) -> String {
     if s.len() <= n {
         s.to_string()
     } else {
-        format!("{}…", &s[..n.saturating_sub(1)])
+        // cut on char boundaries — session logs hold arbitrary UTF-8
+        format!("{}…", s.chars().take(n.saturating_sub(1)).collect::<String>())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::truncate;
+
+    #[test]
+    fn truncate_respects_char_boundaries() {
+        assert_eq!(truncate("short", 70), "short");
+        assert_eq!(truncate("abcdefghij", 4), "abc…");
+        // multibyte chars must not panic when the cut lands inside one
+        assert_eq!(truncate("héllo wörld, éèêë", 8), "héllo w…");
+        assert_eq!(truncate("日本語のテキストです", 5), "日本語の…");
     }
 }
