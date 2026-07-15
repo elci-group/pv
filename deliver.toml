@@ -1,0 +1,95 @@
+[[file]]
+path = "src/main.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "src/commands.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "src/procfs.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "src/intent.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "src/pressure.rs"
+required = true
+
+[[file]]
+path = "src/recommend.rs"
+required = true
+
+[[file]]
+path = "src/suspend.rs"
+required = true
+
+[[file]]
+path = "src/session.rs"
+required = true
+
+[[file]]
+path = "src/policy.rs"
+required = true
+
+[[file]]
+path = "src/migrate.rs"
+required = true
+
+[[file]]
+path = "src/display.rs"
+required = true
+
+[[file]]
+path = "src/notify.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "src/daemon.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "README.md"
+required = true
+
+[[command]]
+name = "release build"
+cmd = ["cargo", "build", "--release"]
+expect_exit = 0
+timeout_secs = 300
+
+[[command]]
+name = "smoke: intent recognition"
+cmd = ["./target/release/pv", "intent", "cargo", "build"]
+expect_exit = 0
+stdout_contains = ["Build Rust workspace"]
+
+[[command]]
+name = "smoke: pressure"
+cmd = ["./target/release/pv", "pressure"]
+expect_exit = 0
+stdout_contains = ["System pressure"]
+
+[[command]]
+name = "smoke: explain"
+cmd = ["./target/release/pv", "explain"]
+expect_exit = 0
+
+[[command]]
+name = "smoke: notify"
+cmd = ["./target/release/pv", "notify"]
+expect_exit = 0
+stdout_contains = ["PV::VALVE"]
+
+[[command]]
+name = "smoke: habits"
+cmd = ["./target/release/pv", "habits"]
+expect_exit = 0

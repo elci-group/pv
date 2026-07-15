@@ -1,0 +1,17 @@
+# Amber policy for pv — dependency discipline.
+#
+# Current set (3 direct deps), reviewed 2026-07-15:
+#   clap   — derive-based CLI for 16 subcommands; a hand-rolled parser would
+#            be larger and worse. Accepted (amber score 68, "review").
+#   serde  — SECURE, required for all state/config structs.
+#   toml   — single format for both human-edited config (policies, hosts)
+#            and machine state (sessions, suspended, habits).
+#
+# serde_json was removed in favor of toml to keep one serializer in the tree.
+
+threshold = 60
+
+[policy]
+required = ["serde", "clap", "toml"]
+forbidden = ["serde_json", "anyhow", "thiserror", "regex", "chrono", "walkdir"]
+strict = false
