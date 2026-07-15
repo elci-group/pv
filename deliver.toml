@@ -72,6 +72,15 @@ required = true
 forbid_regex = ["TODO", "FIXME", "unimplemented!"]
 
 [[file]]
+path = "src/bin/pv_bench.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
+path = "bench/REPORT.md"
+required = true
+
+[[file]]
 path = "README.md"
 required = true
 
@@ -139,3 +148,9 @@ stdout_contains = ["PV::VALVE"]
 name = "smoke: habits"
 cmd = ["./target/release/pv", "habits"]
 expect_exit = 0
+
+[[command]]
+name = "bench: baseline invariants"
+cmd = ["./target/release/pv_bench", "--check"]
+expect_exit = 0
+stdout_contains = ["OK"]
