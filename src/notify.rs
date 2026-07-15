@@ -37,9 +37,7 @@ pub struct Cooldowns {
 
 impl Cooldowns {
     pub fn new() -> Self {
-        Cooldowns {
-            map: std::collections::HashMap::new(),
-        }
+        Cooldowns { map: std::collections::HashMap::new() }
     }
     pub fn allow(&mut self, key: &str, level: Level) -> bool {
         let now = std::time::Instant::now();
@@ -149,7 +147,12 @@ pub fn local_hms() -> String {
         .unwrap_or(0)
         + tz_offset();
     let day = secs.rem_euclid(86400);
-    format!("{:02}:{:02}:{:02}", day / 3600, (day % 3600) / 60, day % 60)
+    format!(
+        "{:02}:{:02}:{:02}",
+        day / 3600,
+        (day % 3600) / 60,
+        day % 60
+    )
 }
 
 pub fn local_hour() -> usize {
@@ -207,22 +210,13 @@ pub fn render(t: &Theme, n: &Notice) -> String {
     if let Some((label, score)) = &n.gauge {
         let bar_plain = gauge_bar(*score);
         let bar_colored = if t.enabled {
-            let code = if *score >= 75 {
-                "31"
-            } else if *score >= 45 {
-                "33"
-            } else {
-                "32"
-            };
+            let code = if *score >= 75 { "31" } else if *score >= 45 { "33" } else { "32" };
             t.paint(code, &bar_plain)
         } else {
             bar_plain.clone()
         };
         let vis = format!("{label} {bar_plain} {score}%");
-        out.push(frame(
-            format!("{label} {bar_colored} {score}%"),
-            chars(&vis),
-        ));
+        out.push(frame(format!("{label} {bar_colored} {score}%"), chars(&vis)));
     }
     out.push(frame(String::new(), 0));
 
