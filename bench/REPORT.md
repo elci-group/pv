@@ -36,6 +36,44 @@ staleness           A: min(1800/events, 60)s   B: interval/2 + ttft
 cba = 0.45*acc + 0.25*stability + 0.15*freshness + 0.15*cost (ref $0.50/day)
 ```
 
+## Inference temperature (measured — 630 real API calls, 2026-07-15)
+
+3 deterministically-graded supervisor probes (JSON action emission, enum
+action selection, capacity arithmetic) x 5 identical reps x 6 temperatures.
+pass = correctness vs exact rules, agree = self-agreement across reps.
+kimi-k2-0905 excluded: gated off the developer tier (model_not_found).
+
+| model | 0.0 | 0.2 | 0.5 | 0.8 | 1.0 | 1.5 | ideal | safe ≤ | tok/call |
+|-------|----:|----:|----:|----:|----:|----:|------:|-------:|---------:|
+| `llama-3.1-8b-instant` | 0.67 | 0.67 | 0.47 | 0.47 | 0.53 | 0.40 | **0.0** | 0.0 | 11 |
+| `meta-llama/llama-4-scout-17b-16e-instruct` | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 0.93 | **0.0** | 1.0 | 10 |
+| `openai/gpt-oss-20b` | 1.00 | 1.00 | 1.00 | 1.00 | 0.93 | 1.00 | **0.0** | 0.8 | 156 |
+| `qwen/qwen3-32b` | 1.00 | 0.80 | 0.93 | 0.93 | 0.87 | 0.87 | **0.0** | 0.0 | 355 |
+| `qwen/qwen3.6-27b` | 0.67 | 0.67 | 0.60 | 0.67 | 0.67 | 0.27 | **0.0** | 0.2 | 720 |
+| `llama-3.3-70b-versatile` | 1.00 | 1.00 | 0.93 | 0.93 | 0.87 | 0.93 | **0.0** | 0.2 | 9 |
+| `openai/gpt-oss-120b` | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | **0.0** | 1.5 | 107 |
+
+### Findings
+
+```
+1. temp 0.0 is ideal for EVERY measured model — no model gained
+    anything from temperature; agreement is the first casualty
+2. pv's old 0.2 default was harmless for strong models but already cost
+    8b-instant 20% agreement — pv now calls at temperature 0.0
+3. high temp inflates reasoning tokens (gpt-oss-120b +35%, qwen3-32b +16%
+    at 1.5) — slower and costlier for worse answers
+4. qwen3.6-27b cannot emit single-JSON at ANY temp (parse-fail 5/5 across
+    the board) and collapses at 1.5 — unsuitable for structured
+    supervision output regardless of temperature
+5. 8b-instant's cap is capability, not temperature (arith 0/5 at every
+    temp) — temperature cannot fix a weak model, it can only
+    break a strong one
+6. per-model safe ceilings: 120b eats anything (<=1.5); scout <=1.0;
+    gpt-oss-20b <=0.8; 70b <=0.2; 8b, qwen3-32b, qwen3.6
+    need 0.0 (or near it) to stay reliable
+```
+
+
 ## Workload results
 
 
@@ -277,6 +315,7 @@ so they never enter that regime.
   escalation   : move up one row when req tier exceeds the row's model
   handover     : dynamic ladder 8b <-> 20b <-> 120b over the day; pays on
                  octo+ devices — quad and below stay static (see above)
+  temperature  : 0.0 for all supervision calls (measured sweep; pv was 0.2)
   pv live note : pv's own narration panel is a single-core-class task —
                  llama-3.1-8b-instant stays the right default there; the
                  rows above govern *agentic workflow supervision*.

@@ -116,8 +116,12 @@ pub fn stream(model: &str, system: &str, user: &str, key: &str) -> Receiver<Groq
 }
 
 fn build_payload(model: &str, system: &str, user: &str) -> String {
+    // temperature 0.0: measured ideal for supervision-style prompts — every
+    // model's agreement peaked at 0.0 in the pv_bench temperature sweep
+    // (bench/REPORT.md, 630 real API calls, 2026-07-15); 0.2 already cost
+    // 8b-instant 20% agreement.
     format!(
-        "{{\"model\":\"{model}\",\"stream\":true,\"max_tokens\":220,\"temperature\":0.2,\
+        "{{\"model\":\"{model}\",\"stream\":true,\"max_tokens\":220,\"temperature\":0.0,\
 \"messages\":[{{\"role\":\"system\",\"content\":\"{}\"}},{{\"role\":\"user\",\"content\":\"{}\"}}]}}",
         escape_json(system),
         escape_json(user)
