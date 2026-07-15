@@ -3,7 +3,9 @@
 mod commands;
 mod daemon;
 mod display;
+mod groq;
 mod intent;
+mod live;
 mod migrate;
 mod notify;
 mod policy;
@@ -99,6 +101,18 @@ enum Cmd {
     },
     /// Show the demand profile the daemon has learned about you
     Habits,
+    /// Persistent dynamic view: realtime metrics + streaming Groq inference
+    Live {
+        /// Seconds between redraws
+        #[arg(long, default_value_t = 1)]
+        interval: u64,
+        /// Groq model to stream from
+        #[arg(long, default_value_t = groq::DEFAULT_MODEL.to_string())]
+        model: String,
+        /// Disable inference (metrics only)
+        #[arg(long)]
+        no_infer: bool,
+    },
 }
 
 extern "C" {
@@ -139,6 +153,9 @@ fn main() {
         }
         Some(Cmd::Notify { desktop }) => daemon::run_notify(&theme, desktop),
         Some(Cmd::Habits) => daemon::print_habits(&theme),
+        Some(Cmd::Live { interval, model, no_infer }) => {
+            live::run_live(&theme, interval, &model, no_infer)
+        }
     };
     std::process::exit(code);
 }
