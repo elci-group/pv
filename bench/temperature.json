@@ -1,0 +1,70 @@
+{
+ "fetched": "2026-07-15 16:49 UTC",
+ "reps": 1,
+ "temps": [
+  0.2
+ ],
+ "probes": [
+  "json",
+  "action",
+  "arith"
+ ],
+ "cells": {
+  "llama-3.1-8b-instant": {
+   "0.2": {
+    "json": {
+     "pass": 0,
+     "answers": [
+      "restart the firefox application"
+     ],
+     "tokens": 29,
+     "errors": 0
+    },
+    "action": {
+     "pass": 1,
+     "answers": [
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 5,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 0,
+     "answers": [
+      "92"
+     ],
+     "tokens": 2,
+     "errors": 0
+    }
+   }
+  },
+  "openai/gpt-oss-20b": {
+   "0.2": {
+    "json": {
+     "pass": 1,
+     "answers": [
+      "suspend"
+     ],
+     "tokens": 231,
+     "errors": 0
+    },
+    "action": {
+     "pass": 1,
+     "answers": [
+      "SUSPEND_BROWSER"
+     ],
+     "tokens": 159,
+     "errors": 0
+    },
+    "arith": {
+     "pass": 1,
+     "answers": [
+      "94"
+     ],
+     "tokens": 80,
+     "errors": 0
+    }
+   }
+  }
+ }
+}
