@@ -176,9 +176,7 @@ struct Outcome {
     stability: f64,  // 0-1, display determinism / absence of churn
     staleness_s: f64,
     cost_day: f64,
-    fresh_score: f64, // 0-1
-    cost_score: f64,  // 0-1
-    cba: f64,         // weighted composite 0-1
+    cba: f64,        // weighted composite 0-1
     pass: bool,
 }
 
@@ -237,8 +235,6 @@ fn simulate(m: &Model, w: &Workload, arch: Arch) -> Outcome {
         stability: stability.clamp(0.0, 0.99),
         staleness_s,
         cost_day,
-        fresh_score,
-        cost_score,
         cba,
         pass: accuracy >= PASS_THRESHOLD,
     }
