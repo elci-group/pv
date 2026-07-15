@@ -52,7 +52,7 @@ pub fn is_newer(latest: &str, current: &str) -> bool {
 /// and blocks the install (checksum verification is mandatory).
 pub fn latest_release(repo: &str) -> Result<Option<(String, String, Option<String>)>, String> {
     let url = format!("https://api.github.com/repos/{repo}/releases/latest");
-    let body = match curl(&[&url]) {
+    let body = match crate::net::get_string(&url, UA) {
         Ok(b) => b,
         Err(e) => {
             if e.contains("404") || e.contains("Not Found") {
@@ -98,9 +98,10 @@ fn asset_url(json: &str, name: &str) -> Option<String> {
 /// Version string in the remote main branch's Cargo.toml (cheap pre-check
 /// for source builds).
 pub fn remote_source_version(repo: &str) -> Result<String, String> {
-    let body = curl(&[&format!(
-        "https://raw.githubusercontent.com/{repo}/main/Cargo.toml"
-    )])?;
+    let body = crate::net::get_string(
+        &format!("https://raw.githubusercontent.com/{repo}/main/Cargo.toml"),
+        UA,
+    )?;
     for line in body.lines() {
         if let Some(v) = line.strip_prefix("version") {
             if let Some(q) = v.trim().strip_prefix('=') {
@@ -201,20 +202,6 @@ fn install(binary: &Path, system: bool) -> Result<PathBuf, String> {
 
 // ---------------------------------------------------------------- flows
 
-fn download(url: &str, dest: &Path) -> Result<(), String> {
-    let st = Command::new("curl")
-        .args(["-fsSL", "-H", "User-Agent: pv-updater", "-o"])
-        .arg(dest)
-        .arg(url)
-        .status()
-        .map_err(|e| format!("curl: {e}"))?;
-    if st.success() {
-        Ok(())
-    } else {
-        Err(format!("download failed ({st})"))
-    }
-}
-
 /// Lowercased sha256 hash for `name` in a SHA256SUMS body
 /// (`<64-hex>  <name>` per line, `*name` in binary mode). None when the
 /// line is absent or the hash field is not 64 hex chars.
@@ -300,8 +287,8 @@ pub fn run(t: &Theme, o: &Options) -> i32 {
                 let sums = tmp.join(SUMS_ASSET);
                 print!("{}", t.dim("downloading… "));
                 let _ = std::io::Write::flush(&mut std::io::stdout());
-                let outcome = download(&url, &bin)
-                    .and_then(|()| download(&sums_url, &sums))
+                let outcome = crate::net::download(&url, &bin, UA)
+                    .and_then(|()| crate::net::download(&sums_url, &sums, UA))
                     .and_then(|()| {
                         fs::read_to_string(&sums)
                             .map_err(|e| format!("read {}: {e}", sums.display()))

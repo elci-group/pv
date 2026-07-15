@@ -23,10 +23,7 @@ pub fn get_string(url: &str, headers: &[&str]) -> Result<String, String> {
     for h in headers {
         cmd.args(["-H", h]);
     }
-    let out = cmd
-        .arg(url)
-        .output()
-        .map_err(|e| format!("curl: {e}"))?;
+    let out = cmd.arg(url).output().map_err(|e| format!("curl: {e}"))?;
     if !out.status.success() {
         return Err(format!(
             "request failed ({})",
