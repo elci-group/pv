@@ -91,6 +91,8 @@ $ pv suspend firefox
 ❄ Firefox frozen — 1.3 GB held, resume with `pv resume firefox`
 ```
 
+![pv suspend and resume of a live process](docs/suspend.gif)
+
 ### `pv policy` — pressure policies
 
 Declarative rules in `~/.config/pv/policies.toml` (`pv policy --init` for
