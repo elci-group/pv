@@ -201,6 +201,60 @@ ffmpeg -i cast.mp4                   80%cpu   500MB
 
 mean cost ratio B/A: 9.9x — mean stability delta (A-B): +0.21
 
+## Dynamic scaling handover — cheaper models when cores idle
+
+24 h synthetic activity curves (anchors + 15% 3 h-wobble), 5-min ticks,
+arch-A call model; demand interpolated between single-core and device peak.
+
+
+### Model ladder per device (handover thresholds)
+
+| device | peak req tier | ladder over activity f |
+|--------|--------------:|------------------------|
+| single-core | 1.0 | 8b-instant (always) |
+| dual-core | 2.0 | 8b-instant f≤0.06 → gpt-oss-20b f>0.07 |
+| quad-core | 3.0 | 8b-instant f≤0.02 → gpt-oss-20b f>0.03 |
+| octo-core | 3.5 | gpt-oss-20b f≤0.85 → gpt-oss-120b f>0.86 |
+| 12-core | 4.0 | gpt-oss-20b f≤0.65 → gpt-oss-120b f>0.66 |
+
+
+### Simulated day — static vs naive vs hysteresis
+
+| device | static $/day | naive $/day (handovers) | hysteresis $/day (handovers) | saved | floor violations |
+|--------|-------------:|------------------------:|-----------------------------:|------:|-----------------:|
+| single-core | $0.08 | $0.08 (0) | $0.08 (0) | 0% | 0 |
+| dual-core | $0.22 | $0.22 (0) | $0.22 (0) | 0% | 0 |
+| quad-core | $0.35 | $0.35 (0) | $0.35 (0) | 0% | 0 |
+| octo-core | $1.58 | $1.04 (6) | $1.05 (6) | 34% | 0 |
+| 12-core | $2.56 | $2.16 (8) | $2.18 (6) | 15% | 0 |
+
+  total: static $4.79/day → hysteresis $3.87/day (19% saved)
+
+### Handover strategy
+
+```
+1. rungs        8b-instant (single-agent idle) -> gpt-oss-20b (fleet
+                floor) -> gpt-oss-120b (fleet peak); kimi-k2 premium only
+2. scale UP     the tick the accuracy floor would breach — under-tier
+    advice is worse than none; never wait
+3. scale DOWN   only after the cheaper rung holds 2 ticks (10 min) —
+    kills wobble flapping around a threshold
+4. floor        devices running an orchestrator never drop below
+    gpt-oss-20b, even at deep idle
+5. free handover supervision calls are stateless — the previous model's
+    last advice stays displayed until the new model's first
+    response lands (atomic swap, no flicker)
+6. degrade UP   if a handover call fails, keep the larger model
+7. pre-arm      pv habits knows the per-hour profile — when the next
+    hour historically runs >=2x current demand, warm the
+    bigger rung one tick early
+8. where it pays octo+ devices (peak req tier >= 3.5); octo gains most —
+    on 12-core the peak hours dominate spend, so savings are
+    real but smaller. quad and below already bottom out on
+    the cheap rung — stay static
+```
+
+
 ## Verdict
 
 CACHED NON-STREAMING IS STABLE ENOUGH TO COMPETE — and wins on cost.
@@ -221,6 +275,8 @@ so they never enter that regime.
 
   architecture : cached-nonstream (event + 120s heartbeat), atomic swap
   escalation   : move up one row when req tier exceeds the row's model
+  handover     : dynamic ladder 8b <-> 20b <-> 120b over the day; pays on
+                 octo+ devices — quad and below stay static (see above)
   pv live note : pv's own narration panel is a single-core-class task —
                  llama-3.1-8b-instant stays the right default there; the
                  rows above govern *agentic workflow supervision*.
