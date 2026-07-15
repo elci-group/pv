@@ -219,7 +219,6 @@ pub fn follow(s: &Session) -> std::io::Result<()> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -301,7 +300,16 @@ mod tests {
         let dir = sessions_dir_in(&base);
         fs::create_dir_all(&dir).expect("dir");
         for (id, started) in [("c", 300u64), ("a", 100), ("b", 200)] {
-            store(&base, &sess(id, started, u32::MAX, "local", dir.join(format!("{id}.log"))));
+            store(
+                &base,
+                &sess(
+                    id,
+                    started,
+                    u32::MAX,
+                    "local",
+                    dir.join(format!("{id}.log")),
+                ),
+            );
         }
         fs::write(dir.join("garbage.toml"), "not [a session").expect("garbage");
         fs::write(dir.join("wrongshape.toml"), "foo = 1\n").expect("wrong shape");
@@ -362,12 +370,51 @@ mod tests {
         let base = tempdir("gc");
         let dir = sessions_dir_in(&base);
         let old = now() - 90_000; // > 24h ago
-        store(&base, &sess("dead-old", old, u32::MAX, "local", dir.join("dead-old.log")));
-        store(&base, &sess("dead-new", now() - 10, u32::MAX, "local", dir.join("dead-new.log")));
-        store(&base, &sess("alive-old", old, std::process::id(), "local", dir.join("alive.log")));
-        store(&base, &sess("remote-old", old, u32::MAX, "otherhost", dir.join("remote.log")));
+        store(
+            &base,
+            &sess("dead-old", old, u32::MAX, "local", dir.join("dead-old.log")),
+        );
+        store(
+            &base,
+            &sess(
+                "dead-new",
+                now() - 10,
+                u32::MAX,
+                "local",
+                dir.join("dead-new.log"),
+            ),
+        );
+        store(
+            &base,
+            &sess(
+                "alive-old",
+                old,
+                std::process::id(),
+                "local",
+                dir.join("alive.log"),
+            ),
+        );
+        store(
+            &base,
+            &sess(
+                "remote-old",
+                old,
+                u32::MAX,
+                "otherhost",
+                dir.join("remote.log"),
+            ),
+        );
         // clock skew: started in the future must saturate to 0 age, not wrap
-        store(&base, &sess("future", now() + 90_000, u32::MAX, "local", dir.join("future.log")));
+        store(
+            &base,
+            &sess(
+                "future",
+                now() + 90_000,
+                u32::MAX,
+                "local",
+                dir.join("future.log"),
+            ),
+        );
 
         assert_eq!(gc_in(&base), 1);
         assert!(!dir.join("dead-old.toml").exists(), "record removed");

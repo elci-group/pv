@@ -1619,3 +1619,253 @@ fn main() {
         _ => print!("{}", build_report(false)),
     }
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// f64 assertion with relative tolerance (hand-computed decimal wants).
+    fn close(got: f64, want: f64) {
+        let tol = 1e-9 * want.abs().max(1.0);
+        assert!((got - want).abs() <= tol, "got {got}, want {want}");
+    }
+
+    /// Synthetic model for boundary probes; override other fields with
+    /// struct-update syntax where a test needs them.
+    fn synth(tier: f64, quality: f64) -> Model {
+        Model {
+            id: "synthetic",
+            tier,
+            tok_s: 0,
+            ttft_s: 0.0,
+            price_in: 0.0,
+            price_out: 0.0,
+            quality,
+            verbosity: 1.0,
+            variance: 0.0,
+        }
+    }
+
+    fn model(id: &str) -> &'static Model {
+        MODELS.iter().find(|m| m.id == id).unwrap()
+    }
+
+    // ---- pass threshold formula -------------------------------------------
+
+    #[test]
+    fn pass_threshold_is_base_plus_8_per_tier_step() {
+        close(req_accuracy_tier(1.0), 40.0); // boundary: no extra at tier 1
+        close(req_accuracy_tier(2.0), 48.0);
+        close(req_accuracy_tier(3.0), 56.0);
+        close(req_accuracy_tier(3.5), 60.0);
+        close(req_accuracy_tier(4.0), 64.0);
+        // linear: a one-tier step always adds PASS_PER_TIER
+        close(req_accuracy_tier(2.7) - req_accuracy_tier(1.7), PASS_PER_TIER);
+    }
+
+    #[test]
+    fn pass_threshold_reads_req_tier_off_workload() {
+        close(req_accuracy(&WORKLOADS[0]), 40.0); // single-core, req tier 1
+        close(req_accuracy(&WORKLOADS[4]), 64.0); // 12-core, req tier 4
+    }
+
+    // ---- accuracy tier-fit penalty -----------------------------------------
+
+    #[test]
+    fn tier_fit_is_full_when_tier_exactly_met() {
+        close(accuracy_at(&synth(3.0, 63.0), 3.0), 63.0);
+    }
+
+    #[test]
+    fn tier_fit_is_full_far_above_requirement() {
+        // no bonus for overshooting the requirement
+        close(accuracy_at(&synth(4.0, 76.0), 1.0), 76.0);
+        close(accuracy_at(&synth(2.5, 65.0), 2.0), 65.0);
+    }
+
+    #[test]
+    fn tier_fit_penalizes_15pct_per_tier_below() {
+        close(accuracy_at(&synth(2.0, 63.0), 3.0), 63.0 * 0.85); // one below
+        close(accuracy_at(&synth(2.5, 65.0), 3.0), 65.0 * 0.925); // half below
+        close(accuracy_at(&synth(1.0, 63.0), 3.0), 63.0 * 0.70); // two below
+    }
+
+    #[test]
+    fn tier_fit_penalty_floors_at_20pct_far_below() {
+        // still above the floor: 1 - 0.15*5.3 = 0.205
+        close(accuracy_at(&synth(1.0, 42.0), 6.3), 42.0 * 0.205);
+        // past the floor: 1 - 0.15*5.5 = 0.175 -> clamped to 0.2
+        close(accuracy_at(&synth(1.0, 42.0), 6.5), 42.0 * 0.2);
+        // far past: 1 - 0.15*7 < 0 -> clamped to 0.2
+        close(accuracy_at(&synth(1.0, 42.0), 8.0), 42.0 * 0.2);
+    }
+
+    #[test]
+    fn accuracy_caps_at_97() {
+        close(accuracy_at(&synth(4.0, 120.0), 1.0), 97.0);
+        close(accuracy_at(&synth(4.0, 97.0), 4.0), 97.0);
+        close(accuracy_at(&synth(4.0, 96.9), 4.0), 96.9);
+    }
+
+    // ---- arch A (cached non-streaming) formulas -----------------------------
+
+    #[test]
+    fn arch_a_calls_add_uncoalesced_heartbeats() {
+        // no events: heartbeats only
+        close(arch_a_params(0.0, 0.05).0, HEARTBEATS_HR);
+        // 18 events coalesce 60% of heartbeats: 18 + 30*0.4
+        close(arch_a_params(18.0, 0.05).0, 30.0);
+        // coalesce cap (0.8) binds from 24 events/hr on: events + 30*0.2
+        close(arch_a_params(24.0, 0.05).0, 30.0);
+        close(arch_a_params(95.0, 0.05).0, 101.0);
+    }
+
+    #[test]
+    fn arch_a_staleness_caps_at_half_heartbeat() {
+        close(arch_a_params(18.0, 0.05).1, 60.0); // 100s capped to 60s
+        close(arch_a_params(30.0, 0.05).1, 60.0); // boundary: exactly at cap
+        close(arch_a_params(60.0, 0.05).1, 30.0);
+        close(arch_a_params(120.0, 0.05).1, 15.0);
+    }
+
+    #[test]
+    fn arch_a_stability_loses_to_churn_and_variance() {
+        close(arch_a_params(0.0, 0.05).2, 0.945); // variance only
+        close(arch_a_params(64.0, 0.0).2, 0.88); // churn cap boundary: 64/800 = 0.08
+        close(arch_a_params(640.0, 0.0).2, 0.88); // churn cap holds
+        close(arch_a_params(95.0, 0.05).2, 0.865); // 0.96 - 0.08 - 0.015
+    }
+
+    // ---- arch B (streaming) formulas -----------------------------------------
+
+    #[test]
+    fn arch_b_calls_are_fixed_by_stream_interval() {
+        close(arch_b_params(0.22, 0.10).0, 450.0); // 3600/8, event-independent
+        close(arch_b_params(0.45, 0.05).0, 450.0);
+    }
+
+    #[test]
+    fn arch_b_staleness_is_half_interval_plus_ttft() {
+        close(arch_b_params(0.22, 0.10).1, 4.22);
+        close(arch_b_params(0.35, 0.05).1, 4.35);
+    }
+
+    #[test]
+    fn arch_b_stability_absorbs_full_variance() {
+        close(arch_b_params(0.22, 0.10).2, 0.64); // 0.78 - 0.10 - 0.04
+        close(arch_b_params(0.22, 0.05).2, 0.69);
+    }
+
+    // ---- freshness / cost scores ---------------------------------------------
+
+    #[test]
+    fn fresh_score_full_within_need_then_decays() {
+        close(fresh_score(60.0, 120.0), 1.0);
+        close(fresh_score(120.0, 120.0), 1.0); // boundary: exactly at need
+        close(fresh_score(240.0, 120.0), 0.5);
+        close(fresh_score(480.0, 120.0), 0.25);
+    }
+
+    #[test]
+    fn cost_score_hits_documented_reference_points() {
+        close(cost_score(0.0), 1.0); // free-tier-ish
+        close(cost_score(0.50), 0.5); // $0.50/day reference
+        close(cost_score(2.0), 0.2); // $2/day
+    }
+
+    // ---- cba composite --------------------------------------------------------
+
+    #[test]
+    fn cba_weights_sum_to_one() {
+        close(cba_score(100.0, 1.0, 1.0, 1.0), 1.0);
+        close(cba_score(0.0, 0.0, 0.0, 0.0), 0.0);
+    }
+
+    #[test]
+    fn cba_applies_each_weight_independently() {
+        close(cba_score(100.0, 0.0, 0.0, 0.0), 0.45);
+        close(cba_score(0.0, 1.0, 0.0, 0.0), 0.25);
+        close(cba_score(0.0, 0.0, 1.0, 0.0), 0.15);
+        close(cba_score(0.0, 0.0, 0.0, 1.0), 0.15);
+    }
+
+    // ---- costs at reference prices ---------------------------------------------
+
+    #[test]
+    fn call_cost_at_reference_prices() {
+        // (1800*0.05 + 220*0.9*0.08) / 1e6
+        close(
+            call_cost(model("llama-3.1-8b-instant"), 1800.0, 220.0),
+            105.84e-6,
+        );
+        // (11000*1.00 + 800*1.4*3.00) / 1e6
+        close(
+            call_cost(model("moonshotai/kimi-k2-instruct-0905"), 11_000.0, 800.0),
+            0.01436,
+        );
+    }
+
+    #[test]
+    fn day_cost_is_linear_in_calls_and_active_hours() {
+        let w = &WORKLOADS[0]; // single-core: 6 active hr/day
+        let m = model("llama-3.1-8b-instant");
+        close(day_cost(m, w, 30.0), 0.0190512); // 30 * 105.84e-6 * 6
+        close(day_cost(m, w, 60.0), 0.0381024);
+    }
+
+    // ---- simulate end-to-end ----------------------------------------------------
+
+    #[test]
+    fn simulate_single_core_8b_cached_matches_hand_computed() {
+        let out = simulate(
+            model("llama-3.1-8b-instant"),
+            &WORKLOADS[0],
+            Arch::CachedNonStream,
+        );
+        close(out.calls_hr, 30.0);
+        close(out.accuracy, 42.0);
+        close(out.stability, 0.9075);
+        close(out.staleness_s, 60.0);
+        close(out.cost_day, 0.0190512);
+        let want_cba =
+            0.45 * 0.42 + 0.25 * 0.9075 + 0.15 * 1.0 + 0.15 * (1.0 / (1.0 + 0.0190512 / 0.50));
+        close(out.cba, want_cba);
+        assert!(out.pass); // 42 >= 40
+    }
+
+    #[test]
+    fn simulate_octo_120b_streaming_matches_hand_computed() {
+        let out = simulate(model("openai/gpt-oss-120b"), &WORKLOADS[3], Arch::Streaming);
+        close(out.calls_hr, 450.0);
+        close(out.accuracy, 76.0);
+        close(out.stability, 0.69);
+        close(out.staleness_s, 4.35);
+        close(out.cost_day, 6.7311); // 450 * (7000*0.15 + 1020*0.60)/1e6 * 9
+        let want_cba =
+            0.45 * 0.76 + 0.25 * 0.69 + 0.15 * 1.0 + 0.15 * (1.0 / (1.0 + 6.7311 / 0.50));
+        close(out.cba, want_cba);
+        assert!(out.pass); // 76 >= 60
+    }
+
+    #[test]
+    fn pass_flag_boundary_is_inclusive() {
+        let w = &WORKLOADS[0]; // req tier 1 -> threshold 40
+        assert!(simulate(&synth(1.0, 40.0), w, Arch::CachedNonStream).pass);
+        assert!(!simulate(&synth(1.0, 39.99), w, Arch::CachedNonStream).pass);
+        assert!(!simulate(&synth(1.0, 39.99), w, Arch::Streaming).pass);
+    }
+
+    #[test]
+    fn simulate_clamps_stored_stability_at_zero() {
+        let m = Model {
+            variance: 0.9,
+            ..synth(1.0, 50.0)
+        };
+        // raw streaming stability: 0.78 - 0.9 - 0.04 = -0.16 -> clamped
+        close(simulate(&m, &WORKLOADS[0], Arch::Streaming).stability, 0.0);
+    }
+}

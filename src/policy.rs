@@ -182,7 +182,6 @@ pub fn evaluate(
     hits
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -315,7 +314,10 @@ action = "throttle"
         let mut r = rule("heavy");
         r.min_rss_mb = Some(100);
         r.action = "suspend".into();
-        let apps = vec![app("firefox", 400 * 1024, 0.0), app("code", 300 * 1024, 0.0)];
+        let apps = vec![
+            app("firefox", 400 * 1024, 0.0),
+            app("code", 300 * 1024, 0.0),
+        ];
         let hits = evaluate(&[r], &apps, &[], &report(0, None));
         // no category on the rule: both apps match, in app order
         assert_eq!(hits.len(), 2);
@@ -376,7 +378,10 @@ action = "throttle"
         r.battery_below = Some(10);
         let a = || vec![app("a", 0, 0.0)];
         // discharging at the threshold: hit
-        assert_eq!(evaluate(&[r.clone()], &a(), &[], &report(0, Some((10, true)))).len(), 1);
+        assert_eq!(
+            evaluate(&[r.clone()], &a(), &[], &report(0, Some((10, true)))).len(),
+            1
+        );
         // discharging above the threshold: no hit
         assert!(evaluate(&[r.clone()], &a(), &[], &report(0, Some((11, true)))).is_empty());
         // low but on AC: no hit
@@ -424,7 +429,12 @@ action = "throttle"
         r.message = Some("Suspend {app} (+{rss_mb} MB) batt {battery}".into());
         let mut firefox = app("firefox", 512 * 1024, 0.0);
         firefox.display = "Firefox".into();
-        let hits = evaluate(&[r], std::slice::from_ref(&firefox), &[], &report(0, Some((7, true))));
+        let hits = evaluate(
+            &[r],
+            std::slice::from_ref(&firefox),
+            &[],
+            &report(0, Some((7, true))),
+        );
         assert_eq!(hits[0].message, "Suspend Firefox (+512 MB) batt 7");
         // without battery info the placeholder degrades to "?"
         let mut r2 = rule("msg2");
