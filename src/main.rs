@@ -19,8 +19,33 @@ mod update;
 use clap::{Parser, Subcommand};
 use display::Theme;
 
+const HELP_BANNER: &str = r#"
+         .  .  .
+        .  .  .  .
+          _______
+         /_______\
+        |\ \   / /|
+        | \ \ / / |
+        |  \ V /  |
+        |  /   \  |
+        | /     \ |
+        |/_______\|
+          |  |  |
+       ___|  |  |___
+      /             \
+   __|               |__
+  |___|             |___|
+
+  P R E S S U R E   V A L V E — intelligent process lifecycle management
+
+  A process is no longer just running or dead. It is an intent with a
+  lifecycle: analysed, monitored, suspended, migrated, resumed, retired.
+
+  Full manual: man -l docs/pv.1
+"#;
+
 #[derive(Parser)]
-#[command(name = "pv", version, about = "Pressure Valve — intelligent process lifecycle management")]
+#[command(name = "pv", version, about = "Pressure Valve — intelligent process lifecycle management", long_about = HELP_BANNER)]
 struct Cli {
     #[command(subcommand)]
     cmd: Option<Cmd>,
