@@ -3,7 +3,7 @@
 
 use std::fs;
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -19,8 +19,12 @@ pub struct Session {
     pub host: String, // "local" or ssh target
 }
 
-fn sessions_dir() -> PathBuf {
-    crate::procfs::xdg("XDG_DATA_HOME", ".local/share").join("pv/sessions")
+fn data_home() -> PathBuf {
+    crate::procfs::xdg("XDG_DATA_HOME", ".local/share")
+}
+
+fn sessions_dir_in(base: &Path) -> PathBuf {
+    base.join("pv/sessions")
 }
 
 fn now() -> u64 {
@@ -31,8 +35,12 @@ fn now() -> u64 {
 }
 
 pub fn list() -> Vec<Session> {
+    list_in(&data_home())
+}
+
+fn list_in(base: &Path) -> Vec<Session> {
     let mut out = Vec::new();
-    if let Ok(rd) = fs::read_dir(sessions_dir()) {
+    if let Ok(rd) = fs::read_dir(sessions_dir_in(base)) {
         for e in rd.flatten() {
             let p = e.path();
             if p.extension().map(|x| x == "toml").unwrap_or(false) {
@@ -56,7 +64,11 @@ pub fn is_alive(s: &Session) -> bool {
 }
 
 pub fn find(id_or_name: &str) -> Option<Session> {
-    let all = list();
+    find_in(&data_home(), id_or_name)
+}
+
+fn find_in(base: &Path, id_or_name: &str) -> Option<Session> {
+    let all = list_in(base);
     all.iter()
         .find(|s| s.id == id_or_name)
         .cloned()
@@ -73,12 +85,22 @@ pub fn find(id_or_name: &str) -> Option<Session> {
 
 /// Spawn `cmd` detached (setsid, no controlling terminal, output to log).
 pub fn run(cmd: &[String], intent_task: &str, intent_category: &str) -> Result<Session, String> {
+    run_in(&data_home(), cmd, intent_task, intent_category)
+}
+
+fn run_in(
+    base: &Path,
+    cmd: &[String],
+    intent_task: &str,
+    intent_category: &str,
+) -> Result<Session, String> {
     if cmd.is_empty() {
         return Err("no command given".into());
     }
-    fs::create_dir_all(sessions_dir()).map_err(|e| e.to_string())?;
+    let dir = sessions_dir_in(base);
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let id = format!("{:08x}", (now() as u32) ^ (std::process::id()));
-    let log = sessions_dir().join(format!("{id}.log"));
+    let log = dir.join(format!("{id}.log"));
     let logf = fs::File::create(&log).map_err(|e| e.to_string())?;
     let errf = logf.try_clone().map_err(|e| e.to_string())?;
 
@@ -119,7 +141,7 @@ pub fn run(cmd: &[String], intent_task: &str, intent_category: &str) -> Result<S
         host: "local".into(),
     };
     fs::write(
-        sessions_dir().join(format!("{id}.toml")),
+        dir.join(format!("{id}.toml")),
         toml::to_string_pretty(&sess).map_err(|e| e.to_string())?,
     )
     .map_err(|e| e.to_string())?;
@@ -150,13 +172,17 @@ pub fn tail(s: &Session, n: usize) -> Vec<String> {
 
 /// Remove finished session records (keep logs' metadata tidy).
 pub fn gc() -> usize {
+    gc_in(&data_home())
+}
+
+fn gc_in(base: &Path) -> usize {
     let mut removed = 0;
-    for s in list() {
+    for s in list_in(base) {
         if s.host == "local" && !is_alive(&s) {
             // keep recent finished sessions for `pv sessions` visibility;
             // only gc those older than 24h
             if now().saturating_sub(s.started) > 86400 {
-                let _ = fs::remove_file(sessions_dir().join(format!("{}.toml", s.id)));
+                let _ = fs::remove_file(sessions_dir_in(base).join(format!("{}.toml", s.id)));
                 let _ = fs::remove_file(&s.log);
                 removed += 1;
             }
@@ -190,5 +216,165 @@ pub fn follow(s: &Session) -> std::io::Result<()> {
             println!("\n[pv] session {} exited", s.id);
             return Ok(());
         }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    /// Unique tempdir per test (pid + sequence + tag); never touches the
+    /// real XDG dirs. Caller removes it at the end of the test.
+    fn tempdir(tag: &str) -> PathBuf {
+        static SEQ: AtomicU64 = AtomicU64::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "pv-session-test-{}-{}-{tag}",
+            std::process::id(),
+            SEQ.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&dir).expect("tempdir");
+        dir
+    }
+
+    fn sess(id: &str, started: u64, pid: u32, host: &str, log: PathBuf) -> Session {
+        Session {
+            id: id.into(),
+            cmd: vec!["sleep".into(), "100".into()],
+            pid,
+            started,
+            intent_task: "task".into(),
+            intent_category: "Build".into(),
+            cwd: "/tmp".into(),
+            log,
+            host: host.into(),
+        }
+    }
+
+    /// Persist a session record exactly where list_in/gc_in look for it.
+    fn store(base: &Path, s: &Session) {
+        let dir = sessions_dir_in(base);
+        fs::create_dir_all(&dir).expect("sessions dir");
+        if let Some(parent) = s.log.parent() {
+            fs::create_dir_all(parent).expect("log dir");
+        }
+        fs::write(&s.log, "log line\n").expect("log");
+        fs::write(
+            dir.join(format!("{}.toml", s.id)),
+            toml::to_string(s).expect("serialize"),
+        )
+        .expect("write record");
+    }
+
+    #[test]
+    fn run_in_rejects_empty_command() {
+        let base = tempdir("empty");
+        assert!(run_in(&base, &[], "t", "c").is_err());
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn run_in_spawns_detached_and_round_trips() {
+        let base = tempdir("run");
+        let cmd = vec!["true".to_string()]; // benign: no output, no mutation
+        let s = run_in(&base, &cmd, "test task", "Build").expect("run");
+        assert_eq!(s.cmd, cmd);
+        assert_eq!(s.intent_task, "test task");
+        assert_eq!(s.intent_category, "Build");
+        assert_eq!(s.host, "local");
+        assert!(s.pid != 0);
+        assert!(s.log.starts_with(&base));
+        assert!(s.log.exists(), "log file created");
+        // record persisted and discoverable
+        let listed = list_in(&base);
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, s.id);
+        let found = find_in(&base, &s.id).expect("find by id");
+        assert_eq!(found.cmd, cmd);
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn list_in_sorts_by_started_and_skips_unparseable() {
+        let base = tempdir("list");
+        let dir = sessions_dir_in(&base);
+        fs::create_dir_all(&dir).expect("dir");
+        for (id, started) in [("c", 300u64), ("a", 100), ("b", 200)] {
+            store(&base, &sess(id, started, u32::MAX, "local", dir.join(format!("{id}.log"))));
+        }
+        fs::write(dir.join("garbage.toml"), "not [a session").expect("garbage");
+        fs::write(dir.join("wrongshape.toml"), "foo = 1\n").expect("wrong shape");
+        fs::write(dir.join("notes.txt"), "id = \"zzz\"\n").expect("non-toml");
+        let ids: Vec<String> = list_in(&base).into_iter().map(|s| s.id).collect();
+        assert_eq!(ids, vec!["a", "b", "c"]);
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn find_in_matches_exact_prefix_and_command() {
+        let base = tempdir("find");
+        let dir = sessions_dir_in(&base);
+        store(&base, &sess("a", 1, u32::MAX, "local", dir.join("a.log")));
+        let mut other = sess("abc", 2, u32::MAX, "local", dir.join("abc.log"));
+        other.cmd = vec!["cargo".into(), "build".into()];
+        store(&base, &other);
+        // exact id wins over the prefix-colliding "abc"
+        assert_eq!(find_in(&base, "a").map(|s| s.id), Some("a".into()));
+        // unique prefix
+        assert_eq!(find_in(&base, "ab").map(|s| s.id), Some("abc".into()));
+        // case-insensitive command substring
+        assert_eq!(find_in(&base, "CARGO").map(|s| s.id), Some("abc".into()));
+        assert!(find_in(&base, "nope").is_none());
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn tail_returns_last_n_lines() {
+        let base = tempdir("tail");
+        let log = base.join("t.log");
+        fs::write(&log, "l1\nl2\nl3\nl4\nl5\n").expect("log");
+        let s = sess("t", 0, u32::MAX, "local", log);
+        assert_eq!(tail(&s, 2), vec!["l4".to_string(), "l5".to_string()]);
+        assert_eq!(tail(&s, 99).len(), 5);
+        assert_eq!(tail(&s, 0).len(), 0);
+        // missing log: empty, not a panic
+        let gone = sess("gone", 0, u32::MAX, "local", base.join("nope.log"));
+        assert!(tail(&gone, 3).is_empty());
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn is_alive_checks_proc_only_for_local_sessions() {
+        let me = std::process::id();
+        let local_alive = sess("x", 0, me, "local", PathBuf::new());
+        assert!(is_alive(&local_alive));
+        // 4294967295 cannot be a live pid (Linux pid_max tops out far lower)
+        let local_dead = sess("y", 0, u32::MAX, "local", PathBuf::new());
+        assert!(!is_alive(&local_dead));
+        // remote liveness is ssh's problem; assumed alive here
+        let remote = sess("z", 0, u32::MAX, "otherhost", PathBuf::new());
+        assert!(is_alive(&remote));
+    }
+
+    #[test]
+    fn gc_in_removes_only_old_dead_local_sessions() {
+        let base = tempdir("gc");
+        let dir = sessions_dir_in(&base);
+        let old = now() - 90_000; // > 24h ago
+        store(&base, &sess("dead-old", old, u32::MAX, "local", dir.join("dead-old.log")));
+        store(&base, &sess("dead-new", now() - 10, u32::MAX, "local", dir.join("dead-new.log")));
+        store(&base, &sess("alive-old", old, std::process::id(), "local", dir.join("alive.log")));
+        store(&base, &sess("remote-old", old, u32::MAX, "otherhost", dir.join("remote.log")));
+        // clock skew: started in the future must saturate to 0 age, not wrap
+        store(&base, &sess("future", now() + 90_000, u32::MAX, "local", dir.join("future.log")));
+
+        assert_eq!(gc_in(&base), 1);
+        assert!(!dir.join("dead-old.toml").exists(), "record removed");
+        assert!(!dir.join("dead-old.log").exists(), "log removed");
+        for kept in ["dead-new", "alive-old", "remote-old", "future"] {
+            assert!(dir.join(format!("{kept}.toml")).exists(), "{kept} kept");
+        }
+        let _ = fs::remove_dir_all(&base);
     }
 }

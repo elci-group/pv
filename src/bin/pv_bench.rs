@@ -250,46 +250,69 @@ struct Outcome {
     pass: bool,
 }
 
-fn simulate(m: &Model, w: &Workload, arch: Arch) -> Outcome {
+/// Arch A (cached non-streaming) firing pattern: (calls/hr, staleness s,
+/// stability) at a given event rate and model variance.
+fn arch_a_params(events_hr: f64, variance: f64) -> (f64, f64, f64) {
+    // events plus the heartbeats that don't coalesce with an event
+    let coalesce = (events_hr / HEARTBEATS_HR).min(0.8);
+    let calls = events_hr + HEARTBEATS_HR * (1.0 - coalesce);
+    // mean age of displayed advice: half the mean inter-fire gap,
+    // capped at half the heartbeat (the heartbeat bounds worst case)
+    let staleness = (1800.0 / events_hr).min(HEARTBEAT_S / 2.0);
+    // deterministic cache: only real state changes swap the display;
+    // residual instability grows with event churn, model variance is
+    // mostly absorbed (identical input -> cached output)
+    let stability = 0.96 - (events_hr / 800.0).min(0.08) - variance * 0.3;
+    (calls, staleness, stability)
+}
+
+/// Arch B (streaming) firing pattern: (calls/hr, staleness s, stability)
+/// at a given time-to-first-token and model variance.
+fn arch_b_params(ttft_s: f64, variance: f64) -> (f64, f64, f64) {
+    let calls = 3600.0 / STREAM_INTERVAL_S;
+    let staleness = STREAM_INTERVAL_S / 2.0 + ttft_s;
+    // token-level flicker plus rephrasing churn on every interval
+    let stability = 0.78 - variance - 0.04;
+    (calls, staleness, stability)
+}
+
+/// USD per supervised day: hourly call volume x per-call price x active hours.
+fn day_cost(m: &Model, w: &Workload, calls_hr: f64) -> f64 {
     let out_tokens = w.ctx_out as f64 * m.verbosity;
-
-    let (calls_hr, staleness_s, stability) = match arch {
-        Arch::CachedNonStream => {
-            // events plus the heartbeats that don't coalesce with an event
-            let coalesce = (w.events_hr / HEARTBEATS_HR).min(0.8);
-            let calls = w.events_hr + HEARTBEATS_HR * (1.0 - coalesce);
-            // mean age of displayed advice: half the mean inter-fire gap,
-            // capped at half the heartbeat (the heartbeat bounds worst case)
-            let staleness = (1800.0 / w.events_hr).min(HEARTBEAT_S / 2.0);
-            // deterministic cache: only real state changes swap the display;
-            // residual instability grows with event churn, model variance is
-            // mostly absorbed (identical input -> cached output)
-            let stability = 0.96 - (w.events_hr / 800.0).min(0.08) - m.variance * 0.3;
-            (calls, staleness, stability)
-        }
-        Arch::Streaming => {
-            let calls = 3600.0 / STREAM_INTERVAL_S;
-            let staleness = STREAM_INTERVAL_S / 2.0 + m.ttft_s;
-            // token-level flicker plus rephrasing churn on every interval
-            let stability = 0.78 - m.variance - 0.04;
-            (calls, staleness, stability)
-        }
-    };
-
     let cost_hr = calls_hr * (w.ctx_in as f64 * m.price_in + out_tokens * m.price_out) / 1e6;
-    let cost_day = cost_hr * w.active_hr_day;
+    cost_hr * w.active_hr_day
+}
 
-    let accuracy = accuracy_at(m, w.req_tier);
-
-    let fresh_score = if staleness_s <= w.freshness_need_s {
+/// Freshness score: 1 while advice age stays within the need, then decays.
+fn fresh_score(staleness_s: f64, freshness_need_s: f64) -> f64 {
+    if staleness_s <= freshness_need_s {
         1.0
     } else {
-        (w.freshness_need_s / staleness_s).clamp(0.0, 1.0)
-    };
-    // $0.50/day reference: free-tier-ish supervision scores ~1, $2/day ~0.2
-    let cost_score = 1.0 / (1.0 + cost_day / 0.50);
+        (freshness_need_s / staleness_s).clamp(0.0, 1.0)
+    }
+}
 
-    let cba = 0.45 * (accuracy / 100.0) + 0.25 * stability + 0.15 * fresh_score + 0.15 * cost_score;
+/// $0.50/day reference: free-tier-ish supervision scores ~1, $2/day ~0.2.
+fn cost_score(cost_day: f64) -> f64 {
+    1.0 / (1.0 + cost_day / 0.50)
+}
+
+/// Weighted composite (0-1): accuracy dominates, then display stability.
+fn cba_score(accuracy: f64, stability: f64, fresh_score: f64, cost_score: f64) -> f64 {
+    0.45 * (accuracy / 100.0) + 0.25 * stability + 0.15 * fresh_score + 0.15 * cost_score
+}
+
+fn simulate(m: &Model, w: &Workload, arch: Arch) -> Outcome {
+    let (calls_hr, staleness_s, stability) = match arch {
+        Arch::CachedNonStream => arch_a_params(w.events_hr, m.variance),
+        Arch::Streaming => arch_b_params(m.ttft_s, m.variance),
+    };
+
+    let cost_day = day_cost(m, w, calls_hr);
+    let accuracy = accuracy_at(m, w.req_tier);
+    let fresh_score = fresh_score(staleness_s, w.freshness_need_s);
+    let cost_score = cost_score(cost_day);
+    let cba = cba_score(accuracy, stability, fresh_score, cost_score);
 
     Outcome {
         calls_hr,

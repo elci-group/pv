@@ -57,7 +57,8 @@ migratability, GPU needs.
 .TP
 .BI "pv run -- " cmd...
 Run a command as a detached session (setsid, logged). Survives terminal and
-SSH disconnects.
+SSH disconnects. \fB--remote\fR \fIhost\fR rsyncs the working directory to
+a configured host and runs the command there over ssh instead.
 .TP
 .B pv sessions
 List pv sessions with last log line.
@@ -92,8 +93,9 @@ List configured remote hosts with online probes.
 .TP
 .BI "pv migrate " target " [" --to " host" ]
 Move restartable work (builds, encodes) to a remote host: rsync the working
-directory, resume the command over ssh, stream output back. Refuses
-non-migratable intents.
+directory, re-run the command there over ssh, stream output back. No
+process state crosses \(em this is re-execution, not checkpointing, and
+the local process keeps running. Refuses non-migratable intents.
 .TP
 .BR "pv daemon " [ --interval " N" ] [ --desktop ] [ --install ]
 Continuous observation: learns a per-hour demand profile, tracks variance,
@@ -112,10 +114,48 @@ Persistent dynamic view: realtime metrics, RSS trend arrows, and a
 streaming Groq inference panel. Inference re-fires on meaningful state
 change or a 120 s heartbeat. Default model: llama-3.1-8b-instant.
 .TP
+.B pv doctor
+Environment preflight: probes the external tools pv shells out to (see
+REQUIREMENTS) and the optional configuration files, reporting which
+features degrade when something is absent. Exits 1 when a required tool
+is missing.
+.TP
 .BR "pv update " [ --source ] [ --system ] [ --force ] [ --check ]
 Self-update: latest GitHub release binary (fallback: clone + build from
 source). Installs to \fI~/.local/bin\fR, or \fI/usr/local/bin\fR with
 \fB--system\fR (via sudo). \fB--check\fR compares versions only.
+.SH REQUIREMENTS
+pv keeps its crate dependencies tiny (clap/serde/toml) by shelling out to
+standard Unix tools instead of linking libraries.
+.B pv doctor
+verifies the environment and reports which features degrade when a tool
+is absent.
+.SS Core (required)
+.TP
+.B curl
+Groq inference transport; release downloads in \fBpv update\fR.
+.TP
+.B sha256sum
+Checksum verification of downloaded release binaries.
+.SS Optional (the matching feature degrades gracefully)
+.TP
+.BR ssh ", " rsync
+\fBpv migrate\fR and \fBpv run --remote\fR.
+.TP
+.BR git ", " cargo
+\fBpv update --source\fR (clone + build fallback).
+.TP
+.B notify-send
+Desktop bridge for valve notifications (\fB--desktop\fR).
+.TP
+.B getconf
+Precise CPU tick rate.
+.TP
+.BR renice ", " ionice
+Policy throttle actions (\fBpv policy --apply\fR).
+.TP
+.B stty
+\fBpv live\fR terminal mode.
 .SH FILES
 .TP
 .I ~/.config/pv/policies.toml
@@ -155,7 +195,7 @@ Freeze an idle browser, reclaiming its memory until resumed.
 Detached, disconnect-proof build; follow with \fBpv attach\fR.
 .TP
 .B pv migrate cargo --to desktop
-Rsync the workspace and resume the build on the remote host.
+Rsync the workspace and re-run the build on the remote host.
 .TP
 .B pv live --model llama-3.3-70b-versatile
 Dynamic view with the sharper Groq model.

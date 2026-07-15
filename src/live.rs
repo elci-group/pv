@@ -229,6 +229,31 @@ fn state_sig(apps: &[App], r: &PressureReport) -> u64 {
 
 // ------------------------------------------------------------- rendering
 
+/// Ambient system facts a frame needs. Gathered once per tick so `render`
+/// itself stays a pure function of its inputs (and unit-testable).
+struct FrameEnv {
+    now: String,            // local clock, HH:MM:SS
+    load1: f64,             // 1-minute load average
+    cpu_count: usize,       // logical cores
+    thermal: Option<f64>,   // hottest thermal zone, °C
+    suspended: Vec<String>, // keys of frozen apps
+}
+
+impl FrameEnv {
+    fn gather() -> Self {
+        FrameEnv {
+            now: notify::local_hms(),
+            load1: procfs::loadavg().0,
+            cpu_count: procfs::cpu_count(),
+            thermal: procfs::hottest_thermal(),
+            suspended: suspend::load_suspended()
+                .into_iter()
+                .map(|s| s.key)
+                .collect(),
+        }
+    }
+}
+
 fn vis(s: &str) -> usize {
     s.chars().count()
 }
@@ -273,12 +298,13 @@ fn render(
     prev_rss: &HashMap<String, u64>,
     infer: &Infer,
     key_present: bool,
+    env: &FrameEnv,
 ) -> String {
     let inner = w.saturating_sub(4);
     let mut out: Vec<String> = Vec::new();
     let fc = Theme::cyan;
 
-    let head = format!("[ PV::LIVE ]═[ {} ]═[ {}s ]", notify::local_hms(), interval);
+    let head = format!("[ PV::LIVE ]═[ {} ]═[ {}s ]", env.now, interval);
     out.push(format!(
         "{}{}{}",
         fc(t, "╔═"),
@@ -343,13 +369,14 @@ fn render(
             )
         })
         .unwrap_or_else(|| "BAT --".into());
-    let therm = procfs::hottest_thermal()
+    let therm = env
+        .thermal
         .map(|t| format!("{t:.0}°C"))
         .unwrap_or_else(|| "--".into());
     let g2 = format!(
         "LOAD {:.2}/{}  MEM {:+.1}MB/s{}  THERM {}  {}",
-        procfs::loadavg().0,
-        procfs::cpu_count(),
+        env.load1,
+        env.cpu_count,
         -r.mem_rate_kb_s / 1024.0,
         r.oom_eta_secs
             .map(|e| format!("  OOM~{}", crate::pressure::fmt_eta(e)))
@@ -361,7 +388,7 @@ fn render(
 
     // process table
     out.push(sep("processes"));
-    let susp = suspend::load_suspended();
+    let susp = &env.suspended;
     let max_apps = rows.saturating_sub(16).clamp(3, 12);
     for app in apps
         .iter()
@@ -377,7 +404,7 @@ fn render(
             Some(&p) if app.rss_kb + 10_000 < p => t.green("▼"),
             _ => " ".to_string(),
         };
-        let is_susp = susp.iter().any(|s| s.key == app.key);
+        let is_susp = susp.iter().any(|k| k == &app.key);
         let (state_word, state_rendered): (String, String) = if is_susp {
             ("frozen".into(), t.magenta("frozen"))
         } else if app.cpu_pct >= 1.0 {
@@ -532,6 +559,7 @@ pub fn run_live(t: &Theme, interval: u64, model: &str, no_infer: bool) -> i32 {
         }
 
         (cols, rows) = term_size();
+        let env = FrameEnv::gather();
         let frame = render(
             t,
             cols.min(110),
@@ -544,6 +572,7 @@ pub fn run_live(t: &Theme, interval: u64, model: &str, no_infer: bool) -> i32 {
             &prev_rss,
             &infer,
             key.is_some(),
+            &env,
         );
         print!("\x1b[H\x1b[J{frame}");
         let _ = std::io::stdout().flush();
@@ -562,4 +591,400 @@ pub fn run_live(t: &Theme, interval: u64, model: &str, no_infer: bool) -> i32 {
     }
     cleanup(&saved_stty);
     0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::intent::Category;
+    use crate::pressure::ResourcePressure;
+    use crate::procfs::{Battery, MemInfo};
+
+    const W: usize = 80;
+
+    fn app(key: &str, display: &str, rss_kb: u64, cpu_pct: f64) -> App {
+        App {
+            key: key.into(),
+            display: display.into(),
+            pids: vec![1],
+            leader: 1,
+            rss_kb,
+            cpu_pct,
+            state: 'S',
+            tty: false,
+            has_audio: false,
+            cmdline: String::new(),
+            argv: vec![],
+            age_secs: 0.0,
+            kernel: false,
+        }
+    }
+
+    fn intent(category: Category) -> Intent {
+        Intent {
+            category,
+            task: String::new(),
+            interactive: false,
+            can_suspend: true,
+            can_interrupt: false,
+            can_migrate: false,
+            remote_friendly: false,
+            gpu: false,
+            never_suspend: false,
+            detail: String::new(),
+        }
+    }
+
+    fn report(cpu: u8, mem: u8, io: u8) -> PressureReport {
+        let rp = |name: &'static str, score: u8| ResourcePressure {
+            name,
+            score,
+            detail: String::new(),
+        };
+        PressureReport {
+            cpu: rp("CPU", cpu),
+            memory: rp("RAM", mem),
+            io: rp("IO", io),
+            battery: None,
+            thermal: None,
+            mem: MemInfo {
+                total_kb: 16_000_000,
+                available_kb: 8_000_000,
+                swap_total_kb: 4_000_000,
+                swap_free_kb: 4_000_000,
+            },
+            battery_info: Some(Battery {
+                capacity: 85,
+                discharging: true,
+            }),
+            mem_rate_kb_s: -1024.0, // available growing by 1 MB/s
+            oom_eta_secs: None,
+            overall: cpu.max(mem).max(io),
+        }
+    }
+
+    fn env() -> FrameEnv {
+        FrameEnv {
+            now: "12:34:56".into(),
+            load1: 1.5,
+            cpu_count: 8,
+            thermal: Some(55.0),
+            suspended: vec![],
+        }
+    }
+
+    fn plain() -> Theme {
+        Theme { enabled: false }
+    }
+
+    fn infer_with(text: &str, streaming: bool, note: &str) -> Infer {
+        let mut i = Infer::new();
+        i.text = text.into();
+        i.streaming = streaming;
+        i.note = note.into();
+        i
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn frame(
+        apps: &[App],
+        intents: &[(String, Intent)],
+        r: &PressureReport,
+        prev_rss: &HashMap<String, u64>,
+        infer: &Infer,
+        key_present: bool,
+        env: &FrameEnv,
+    ) -> String {
+        render(
+            &plain(),
+            W,
+            24,
+            2,
+            "llama-test",
+            apps,
+            intents,
+            r,
+            prev_rss,
+            infer,
+            key_present,
+            env,
+        )
+    }
+
+    fn frame_basic(apps: &[App], intents: &[(String, Intent)], infer: &Infer, key: bool) -> String {
+        frame(
+            apps,
+            intents,
+            &report(50, 25, 5),
+            &HashMap::new(),
+            infer,
+            key,
+            &env(),
+        )
+    }
+
+    #[test]
+    fn frame_box_structure_at_80_cols() {
+        let apps = vec![app("firefox", "Firefox", 1_500_000, 25.0)];
+        let intents = vec![("firefox".to_string(), intent(Category::Browser))];
+        let out = frame_basic(&apps, &intents, &Infer::new(), true);
+        let lines: Vec<&str> = out.lines().collect();
+        // head + 2 gauges + sep + 1 app + sep + 5 infer rows + note + foot
+        assert_eq!(lines.len(), 13);
+
+        let head = lines[0];
+        assert!(head.starts_with('╔') && head.ends_with('╗'));
+        assert_eq!(head.chars().count(), W);
+        assert!(head.contains("[ PV::LIVE ]"));
+        assert!(head.contains("[ 12:34:56 ]"));
+        assert!(head.contains("[ 2s ]"));
+
+        let foot = lines[12];
+        assert!(foot.starts_with('╚') && foot.ends_with('╝'));
+        assert_eq!(foot.chars().count(), W);
+        assert!(foot.contains("[ q quit ]"));
+
+        assert!(lines[3].starts_with('╟') && lines[3].ends_with('╢'));
+        assert!(lines[3].contains("processes"));
+        assert!(lines[5].starts_with('╟') && lines[5].ends_with('╢'));
+        assert!(lines[5].contains("groq :: llama-test"));
+
+        for (i, l) in lines.iter().enumerate().skip(1).take(11) {
+            if l.starts_with('╟') {
+                continue;
+            }
+            assert!(l.starts_with('║') && l.ends_with('║'), "line {i}: {l}");
+        }
+    }
+
+    #[test]
+    fn metrics_rows_show_category_state_rss_and_trend() {
+        let apps = vec![
+            app("firefox", "Firefox", 1_500_000, 25.0),
+            app("code", "Code", 800_000, 0.0),
+        ];
+        let intents = vec![
+            ("firefox".to_string(), intent(Category::Browser)),
+            ("code".to_string(), intent(Category::Editor)),
+        ];
+        let mut prev = HashMap::new();
+        prev.insert("firefox".to_string(), 1_400_000u64); // grew 100 MB -> up
+        prev.insert("code".to_string(), 900_000u64); // shrank 100 MB -> down
+
+        let out = frame(
+            &apps,
+            &intents,
+            &report(50, 25, 5),
+            &prev,
+            &Infer::new(),
+            true,
+            &env(),
+        );
+
+        let fx = out.lines().find(|l| l.contains("Firefox")).expect("fx row");
+        assert_eq!(fx.chars().count(), W);
+        assert!(fx.contains("browser"));
+        assert!(fx.contains("25%"));
+        assert!(fx.contains(&fmt_kb(1_500_000)));
+        assert!(fx.contains('▲'));
+
+        let code = out.lines().find(|l| l.contains("Code")).expect("code row");
+        assert_eq!(code.chars().count(), W);
+        assert!(code.contains("editor"));
+        assert!(code.contains("idle"));
+        assert!(code.contains('▼'));
+    }
+
+    #[test]
+    fn metrics_row_without_intent_shows_question_mark() {
+        let apps = vec![app("mystery", "Mystery", 100_000, 10.0)];
+        let out = frame_basic(&apps, &[], &Infer::new(), true);
+        let row = out.lines().find(|l| l.contains("Mystery")).expect("row");
+        assert!(row.contains('?'));
+    }
+
+    #[test]
+    fn frozen_app_row_shows_frozen_instead_of_cpu() {
+        let apps = vec![app("firefox", "Firefox", 1_500_000, 30.0)];
+        let mut e = env();
+        e.suspended = vec!["firefox".to_string()];
+        let out = frame(
+            &apps,
+            &[],
+            &report(50, 25, 5),
+            &HashMap::new(),
+            &Infer::new(),
+            true,
+            &e,
+        );
+        let row = out.lines().find(|l| l.contains("Firefox")).expect("row");
+        assert!(row.contains("frozen"));
+        assert!(!row.contains("30%"));
+    }
+
+    #[test]
+    fn table_filters_out_small_idle_apps() {
+        let apps = vec![
+            app("big", "Big", 100_000, 50.0),
+            app("tiny", "Tiny", 5_000, 1.0), // below rss and cpu thresholds
+        ];
+        let out = frame_basic(&apps, &[], &Infer::new(), true);
+        assert!(out.contains("Big"));
+        assert!(!out.contains("Tiny"));
+    }
+
+    #[test]
+    fn gauges_show_score_bars_and_sys_stats() {
+        let out = frame_basic(&[], &[], &Infer::new(), true);
+        let lines: Vec<&str> = out.lines().collect();
+
+        // scores 50/25/5 -> bars of width 10 with 5/2 (floor) filled blocks
+        let g1 = lines[1];
+        assert!(g1.contains("CPU"));
+        assert!(g1.contains(&crate::display::bar(50, 10)));
+        assert!(g1.contains("50%"));
+        assert!(g1.contains("RAM"));
+        assert!(g1.contains(&crate::display::bar(25, 10)));
+        assert!(g1.contains("25%"));
+        assert!(g1.contains("IO"));
+        assert!(g1.contains(" 5%"));
+
+        let g2 = lines[2];
+        assert!(g2.contains("LOAD 1.50/8"));
+        assert!(g2.contains("+1.0MB/s"));
+        assert!(g2.contains("THERM 55°C"));
+        assert!(g2.contains("BAT 85%▼"));
+    }
+
+    #[test]
+    fn gauges_show_oom_eta_and_absent_battery_or_thermal() {
+        let mut r = report(10, 90, 5);
+        r.oom_eta_secs = Some(125);
+        r.battery_info = None;
+        let mut e = env();
+        e.thermal = None;
+        let out = frame(&[], &[], &r, &HashMap::new(), &Infer::new(), true, &e);
+        let g2 = out.lines().nth(2).expect("gauges line 2");
+        assert!(g2.contains("OOM~2m 05s"));
+        assert!(g2.contains("THERM --"));
+        assert!(g2.contains("BAT --"));
+    }
+
+    #[test]
+    fn infer_panel_disabled_when_key_absent() {
+        // `--no_infer` (or a missing key) takes this branch in run_live
+        let out = frame_basic(&[], &[], &Infer::new(), false);
+        assert!(out.contains("GROQ_API_KEY not set — inference offline, metrics live"));
+        assert!(out.contains("set the env var or write ~/.config/pv/groq_api_key"));
+        assert!(!out.contains("infer:"));
+        // head + 2 gauges + 2 seps + 5 panel rows + empty note + foot
+        assert_eq!(out.lines().count(), 12);
+    }
+
+    #[test]
+    fn infer_panel_connecting_shows_bare_cursor() {
+        // stream open, no tokens yet
+        let infer = infer_with("", true, "12:34:56 · streaming");
+        let out = frame_basic(&[], &[], &infer, true);
+        let cursor = out.lines().find(|l| l.contains('▌')).expect("cursor row");
+        assert!(cursor.starts_with('║') && cursor.ends_with('║'));
+        assert!(out.contains("infer: 12:34:56 · streaming"));
+    }
+
+    #[test]
+    fn infer_panel_streaming_appends_cursor_to_last_text_line() {
+        let infer = infer_with("chrome holds half of ram", true, "12:34:56 · streaming");
+        let out = frame_basic(&[], &[], &infer, true);
+        let cursor = out.lines().find(|l| l.contains('▌')).expect("cursor row");
+        assert!(cursor.contains("chrome holds half of ram▌"));
+        assert!(out.contains("infer: 12:34:56 · streaming"));
+    }
+
+    #[test]
+    fn infer_panel_error_keeps_last_text_and_surfaces_note() {
+        let infer = infer_with("previous answer text", false, "inference error: boom");
+        let out = frame_basic(&[], &[], &infer, true);
+        assert!(out.contains("previous answer text"));
+        assert!(out.contains("infer: inference error: boom"));
+        assert!(!out.contains('▌'));
+    }
+
+    #[test]
+    fn infer_panel_wraps_and_truncates_to_five_rows() {
+        let long = "word ".repeat(100).trim().to_string();
+        let infer = infer_with(&long, false, "done");
+        let out = frame_basic(&[], &[], &infer, true);
+        let lines: Vec<&str> = out.lines().collect();
+        let sep = lines.iter().position(|l| l.contains("groq ::")).unwrap();
+        let panel = &lines[sep + 1..sep + 6];
+        assert!(panel.iter().all(|l| l.starts_with('║') && l.ends_with('║')));
+        assert!(panel.iter().all(|l| l.chars().count() == W));
+        // wrapped content respects the inner width
+        for l in panel {
+            let text = l.trim_matches('║').trim();
+            assert!(text.chars().count() <= W - 6);
+        }
+        assert!(out.contains("infer: done"));
+    }
+
+    #[test]
+    fn frame_renders_at_narrow_width() {
+        let apps = vec![app("firefox", "Firefox", 1_500_000, 25.0)];
+        let out = render(
+            &plain(),
+            60,
+            24,
+            2,
+            "m",
+            &apps,
+            &[],
+            &report(50, 25, 5),
+            &HashMap::new(),
+            &Infer::new(),
+            true,
+            &env(),
+        );
+        let lines: Vec<&str> = out.lines().collect();
+        assert!(lines[0].starts_with('╔') && lines[0].ends_with('╗'));
+        assert_eq!(lines[0].chars().count(), 60);
+        let row = lines.iter().find(|l| l.contains("Firefox")).expect("row");
+        assert!(row.contains("25%"));
+    }
+
+    #[test]
+    fn colored_theme_emits_ansi_and_keeps_content() {
+        let t = Theme { enabled: true };
+        let apps = vec![app("firefox", "Firefox", 1_500_000, 25.0)];
+        let out = render(
+            &t,
+            W,
+            24,
+            2,
+            "m",
+            &apps,
+            &[],
+            &report(80, 25, 5),
+            &HashMap::new(),
+            &Infer::new(),
+            true,
+            &env(),
+        );
+        assert!(out.contains("\x1b["));
+        assert!(out.contains("Firefox"));
+        assert!(out.contains("[ PV::LIVE ]"));
+        assert!(out.contains("80%"));
+    }
+
+    #[test]
+    fn wrap_breaks_on_word_boundaries() {
+        assert_eq!(
+            wrap("aa bb cc", 5),
+            vec!["aa bb".to_string(), "cc".to_string()]
+        );
+        assert_eq!(wrap("", 10), Vec::<String>::new());
+        assert_eq!(
+            wrap("supercalifragilistic", 5),
+            vec!["supercalifragilistic".to_string()]
+        );
+    }
 }
