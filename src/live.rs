@@ -134,7 +134,7 @@ impl Infer {
     }
 }
 
-const SYSTEM_PROMPT: &str = "You are PV, a pressure-valve process intelligence inside a Linux system monitor. Given a compact system snapshot, reply with 2-4 short plain-text lines, each under 95 characters: what actually matters right now, what is likely to happen next, and the single best action. Name specific apps and numbers. No markdown, no bullets, no preamble.";
+const SYSTEM_PROMPT: &str = "You are PV, a pressure-valve process intelligence inside a Linux system monitor. Given a compact system snapshot, reply with 2-4 short plain-text lines, each under 95 characters: what actually matters right now, what is likely to happen next, and the single best action. Use ONLY facts and numbers present in the snapshot — never invent percentages or processes. No markdown, no bullets, no preamble.";
 
 // ------------------------------------------------------------- snapshot for inference
 
