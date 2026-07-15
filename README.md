@@ -263,6 +263,18 @@ command remotely, streaming output back. Intent-aware — it refuses to
 - cgroup freezer backend as an alternative to SIGSTOP
 - Policy auto-apply from the daemon loop (policies currently evaluate per invocation)
 
+## Demos
+
+The GIFs under `docs/` are recorded with
+[VHS](https://github.com/charmbracelet/vhs) from the tapes in the same
+directory. Re-render after UI changes with:
+
+```sh
+vhs docs/dashboard.tape
+vhs docs/live.tape
+vhs docs/suspend.tape
+```
+
 ## Ecosystem
 
 Part of the Vico Labs toolchain: **kaptaind** (repository state),
