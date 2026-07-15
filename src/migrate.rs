@@ -25,13 +25,7 @@ struct HostsFile {
 }
 
 fn hosts_path() -> PathBuf {
-    let base = std::env::var("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| "/tmp".into()))
-                .join(".config")
-        });
-    base.join("pv/hosts.toml")
+    crate::procfs::xdg("XDG_CONFIG_HOME", ".config").join("pv/hosts.toml")
 }
 
 pub fn load_hosts() -> Vec<(String, Host)> {

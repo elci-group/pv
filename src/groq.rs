@@ -21,13 +21,7 @@ pub fn api_key() -> Option<String> {
         .ok()
         .filter(|k| !k.trim().is_empty())
         .or_else(|| {
-            let base = std::env::var("XDG_CONFIG_HOME")
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(|_| {
-                    std::path::PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| "/tmp".into()))
-                        .join(".config")
-                });
-            std::fs::read_to_string(base.join("pv/groq_api_key"))
+            std::fs::read_to_string(crate::procfs::xdg("XDG_CONFIG_HOME", ".config").join("pv/groq_api_key"))
                 .ok()
                 .map(|s| s.trim().to_string())
                 .filter(|k| !k.is_empty())
