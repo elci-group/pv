@@ -20,13 +20,7 @@ pub struct Session {
 }
 
 fn sessions_dir() -> PathBuf {
-    let base = std::env::var("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| "/tmp".into()))
-                .join(".local/share")
-        });
-    base.join("pv/sessions")
+    crate::procfs::xdg("XDG_DATA_HOME", ".local/share").join("pv/sessions")
 }
 
 fn now() -> u64 {

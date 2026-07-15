@@ -55,6 +55,18 @@ fn read_to_string(p: &Path) -> Option<String> {
     fs::read_to_string(p).ok()
 }
 
+/// XDG base dir; per spec an empty value means "unset", so fall back then too.
+pub fn xdg(var: &str, default_suffix: &str) -> std::path::PathBuf {
+    std::env::var(var)
+        .ok()
+        .filter(|v| !v.is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            std::path::PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| "/tmp".into()))
+                .join(default_suffix)
+        })
+}
+
 pub fn list_pids() -> Vec<u32> {
     let mut out = Vec::new();
     if let Ok(rd) = fs::read_dir("/proc") {
