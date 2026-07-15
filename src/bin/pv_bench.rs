@@ -150,10 +150,17 @@ const HEARTBEATS_HR: f64 = 30.0;
 const HEARTBEAT_S: f64 = 120.0;
 /// B's fixed refire interval while the panel is open.
 const STREAM_INTERVAL_S: f64 = 8.0;
-/// Accuracy below this (0-100) is advice you cannot act on.
-const PASS_THRESHOLD: f64 = 40.0;
+/// Baseline accuracy (0-100) below which advice cannot be acted on.
+const BASE_PASS: f64 = 40.0;
+/// Extra accuracy demanded per requirement-tier step: supervisor errors
+/// compound across agents, so bigger fleets need sharper advice.
+const PASS_PER_TIER: f64 = 8.0;
 /// Accuracy-fit penalty per tier step below the workload requirement.
 const TIER_PENALTY: f64 = 0.15;
+
+fn req_accuracy(w: &Workload) -> f64 {
+    BASE_PASS + PASS_PER_TIER * (w.req_tier - 1.0)
+}
 
 #[derive(Clone, Copy, PartialEq)]
 enum Arch {
@@ -236,7 +243,7 @@ fn simulate(m: &Model, w: &Workload, arch: Arch) -> Outcome {
         staleness_s,
         cost_day,
         cba,
-        pass: accuracy >= PASS_THRESHOLD,
+        pass: accuracy >= req_accuracy(w),
     }
 }
 
@@ -338,12 +345,14 @@ fn build_report(md: bool) -> String {
  \x20                  non-streaming call, atomic panel swap on completion\n\
 B streaming         refire every {} s, tokens displayed as they arrive\n\
 accuracy            quality x tier-fit (penalty {:.0}%/tier below requirement)\n\
-pass threshold      accuracy >= {:.0}/100\n\
+pass threshold      accuracy >= {:.0} + {:.0}*(req tier - 1) — errors compound\n\
+\x20                   across agents, bigger fleets need sharper advice\n\
 stability           A: 0.96 - churn(events) - 0.3*variance (cache dedupes)\n\
 \x20                   B: 0.78 - variance - 0.04 flicker\n\
 staleness           A: min(1800/events, 60)s   B: interval/2 + ttft\n\
 cba = 0.45*acc + 0.25*stability + 0.15*freshness + 0.15*cost (ref $0.50/day)",
-        HEARTBEATS_HR as u32, STREAM_INTERVAL_S as u32, TIER_PENALTY * 100.0, PASS_THRESHOLD), md);
+        HEARTBEATS_HR as u32, STREAM_INTERVAL_S as u32, TIER_PENALTY * 100.0,
+        BASE_PASS, PASS_PER_TIER), md);
 
     // ---- per-workload detail ------------------------------------------------
     h1(&mut s, "Workload results", md);
@@ -504,7 +513,7 @@ fn check() -> Result<(), String> {
         if a.out.staleness_s > w.freshness_need_s {
             return Err(format!("{}: cached staleness violates freshness need", w.name));
         }
-        if a.out.accuracy < PASS_THRESHOLD {
+        if a.out.accuracy < req_accuracy(w) {
             return Err(format!("{}: cached recommendation below threshold", w.name));
         }
     }
