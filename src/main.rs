@@ -7,6 +7,7 @@ mod groq;
 mod intent;
 mod live;
 mod migrate;
+mod net;
 mod notify;
 mod policy;
 mod pressure;

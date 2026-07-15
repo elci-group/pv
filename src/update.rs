@@ -16,6 +16,7 @@ pub const DEFAULT_REPO: &str = "elci-group/pv";
 // binary against its sums line before installing.
 const BINARY_ASSET: &str = "pv-linux-x86_64";
 const SUMS_ASSET: &str = "SHA256SUMS";
+const UA: &[&str] = &["User-Agent: pv-updater"];
 
 #[derive(Debug, Clone)]
 pub struct Options {
@@ -27,21 +28,6 @@ pub struct Options {
 }
 
 // ---------------------------------------------------------------- helpers
-
-fn curl(args: &[&str]) -> Result<String, String> {
-    let out = Command::new("curl")
-        .args(["-fsSL", "-H", "User-Agent: pv-updater"])
-        .args(args)
-        .output()
-        .map_err(|e| format!("curl: {e}"))?;
-    if !out.status.success() {
-        return Err(format!(
-            "request failed ({})",
-            String::from_utf8_lossy(&out.stderr).trim()
-        ));
-    }
-    String::from_utf8(out.stdout).map_err(|e| e.to_string())
-}
 
 pub fn current_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
