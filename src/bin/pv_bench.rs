@@ -158,8 +158,40 @@ const PASS_PER_TIER: f64 = 8.0;
 /// Accuracy-fit penalty per tier step below the workload requirement.
 const TIER_PENALTY: f64 = 0.15;
 
+fn req_accuracy_tier(req_tier: f64) -> f64 {
+    BASE_PASS + PASS_PER_TIER * (req_tier - 1.0)
+}
+
 fn req_accuracy(w: &Workload) -> f64 {
-    BASE_PASS + PASS_PER_TIER * (w.req_tier - 1.0)
+    req_accuracy_tier(w.req_tier)
+}
+
+/// Tier-fit adjusted accuracy (0-100) of a model against a requirement.
+fn accuracy_at(m: &Model, req_tier: f64) -> f64 {
+    let fit = if m.tier >= req_tier {
+        1.0
+    } else {
+        (1.0 - TIER_PENALTY * (req_tier - m.tier)).max(0.2)
+    };
+    (m.quality * fit).min(97.0)
+}
+
+/// USD per supervision call at a given context shape.
+fn call_cost(m: &Model, ctx_in: f64, ctx_out: f64) -> f64 {
+    (ctx_in * m.price_in + ctx_out * m.verbosity * m.price_out) / 1e6
+}
+
+/// Cheapest model clearing the compounding-error accuracy bar at `req_tier`.
+fn cheapest_passing(req_tier: f64, ctx_in: f64, ctx_out: f64) -> Option<&'static Model> {
+    let need = req_accuracy_tier(req_tier);
+    MODELS
+        .iter()
+        .filter(|m| accuracy_at(m, req_tier) >= need)
+        .min_by(|a, b| {
+            call_cost(a, ctx_in, ctx_out)
+                .partial_cmp(&call_cost(b, ctx_in, ctx_out))
+                .unwrap()
+        })
 }
 
 #[derive(Clone, Copy, PartialEq)]
