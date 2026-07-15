@@ -146,7 +146,14 @@ impl Habits {
 
     /// Record one sample into the slot for `hour`. Split from `observe` so the
     /// accumulation logic can be tested without the wall clock.
-    fn observe_at(&mut self, hour: usize, cpu_pct: f64, mem_pct: f64, cv: f64, categories: &[String]) {
+    fn observe_at(
+        &mut self,
+        hour: usize,
+        cpu_pct: f64,
+        mem_pct: f64,
+        cv: f64,
+        categories: &[String],
+    ) {
         let s = &mut self.slots[hour % 24];
         let a = if s.samples < 50 { 0.2 } else { 0.05 }; // learn fast early
         s.cpu_ema = if s.samples == 0 {
@@ -758,4 +765,564 @@ pub fn install_service() -> i32 {
     println!("  systemctl --user daemon-reload");
     println!("  systemctl --user enable --now pv-daemon");
     0
+}
+
+// ---------------------------------------------------------------- tests
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pressure::ResourcePressure;
+    use crate::procfs::{Battery, MemInfo};
+
+    const TOTAL_KB: u64 = 16_000_000; // pretend 16 GB machine
+
+    fn rp(name: &'static str, score: u8) -> ResourcePressure {
+        ResourcePressure {
+            name,
+            score,
+            detail: String::new(),
+        }
+    }
+
+    /// A calm report: low pressure everywhere, nothing draining.
+    fn base_report(total_kb: u64, available_kb: u64) -> PressureReport {
+        PressureReport {
+            cpu: rp("CPU", 10),
+            memory: rp("RAM", 20),
+            io: rp("IO", 0),
+            battery: None,
+            thermal: None,
+            mem: MemInfo {
+                total_kb,
+                available_kb,
+                swap_total_kb: 0,
+                swap_free_kb: 0,
+            },
+            battery_info: None,
+            mem_rate_kb_s: 0.0,
+            oom_eta_secs: None,
+            overall: 20,
+        }
+    }
+
+    fn report_with_used_pct(used_pct: f64) -> PressureReport {
+        let avail = (TOTAL_KB as f64 * (100.0 - used_pct) / 100.0) as u64;
+        base_report(TOTAL_KB, avail)
+    }
+
+    fn app(key: &str, display: &str, rss_kb: u64, cpu_pct: f64) -> App {
+        App {
+            key: key.into(),
+            display: display.into(),
+            pids: vec![4242],
+            leader: 4242,
+            rss_kb,
+            cpu_pct,
+            state: 'S',
+            tty: false,
+            has_audio: false,
+            cmdline: key.into(),
+            argv: vec![key.into()],
+            age_secs: 7200.0,
+            kernel: false,
+        }
+    }
+
+    fn intents_of(apps: &[App]) -> Vec<(String, Intent)> {
+        apps.iter()
+            .map(|a| (a.key.clone(), crate::intent::classify(a)))
+            .collect()
+    }
+
+    fn fresh_habits() -> Habits {
+        Habits {
+            slots: (0..24).map(|_| HabitSlot::default()).collect(),
+            last_save: 0,
+        }
+    }
+
+    /// Ambient readings of a healthy machine at 09:00.
+    fn quiet_sys() -> SysSample {
+        SysSample {
+            ncpu: 8,
+            load1: 0.4,
+            psi_mem_some_avg10: 0.0,
+            hottest_thermal: None,
+            hour: 9,
+        }
+    }
+
+    fn valves(notices: &[Notice]) -> Vec<&'static str> {
+        notices.iter().map(|n| n.valve).collect()
+    }
+
+    // ---------- the decision step ----------
+
+    #[test]
+    fn quiet_system_produces_no_notices() {
+        let apps = vec![app("code", "Code", 800_000, 0.5)];
+        let intents = intents_of(&apps);
+        let report = report_with_used_pct(30.0);
+        let mut hist = History::default();
+        for _ in 0..6 {
+            hist.push(&report, 0.4);
+        }
+        let notices = plan_notices(
+            &apps,
+            &intents,
+            &report,
+            &hist,
+            &fresh_habits(),
+            5,
+            &quiet_sys(),
+        );
+        assert!(
+            notices.is_empty(),
+            "quiet system should plan nothing, got {:?}",
+            valves(&notices)
+        );
+    }
+
+    #[test]
+    fn rising_memory_trend_warns_before_critical() {
+        let mut hist = History::default();
+        // 24 samples at 5s cadence climbing 70% -> ~79% committed
+        for i in 0..24u64 {
+            hist.push(&report_with_used_pct(70.0 + i as f64 * 0.4), 0.5);
+        }
+        assert!(hist.mem_slope_kb_s(5) > 2048.0);
+        assert!(hist.len() >= 12);
+
+        let report = report_with_used_pct(79.0);
+        let notices = plan_notices(&[], &[], &report, &hist, &fresh_habits(), 5, &quiet_sys());
+        assert_eq!(valves(&notices), vec!["V-01"]);
+        let v1 = &notices[0];
+        assert_eq!(v1.level, Level::Warning);
+        assert_eq!(v1.title, "MEMORY PRESSURE RISING");
+        assert!(v1.obs[0].contains("committed and climbing"));
+    }
+
+    #[test]
+    fn committed_memory_fires_critical_overpressure() {
+        let mut report = report_with_used_pct(90.0);
+        report.memory.score = 90;
+        let notices = plan_notices(
+            &[],
+            &[],
+            &report,
+            &History::default(),
+            &fresh_habits(),
+            5,
+            &quiet_sys(),
+        );
+        assert_eq!(valves(&notices), vec!["V-01"]);
+        let v1 = &notices[0];
+        assert_eq!(v1.level, Level::Critical);
+        assert_eq!(v1.title, "MEMORY OVERPRESSURE");
+        assert_eq!(v1.gauge, Some(("RAM".to_string(), 90)));
+    }
+
+    #[test]
+    fn oom_eta_under_ten_minutes_fires_overpressure() {
+        // 60% committed is below the 85% line; the ETA alone must trip V-01.
+        let mut report = report_with_used_pct(60.0);
+        report.oom_eta_secs = Some(300);
+        let notices = plan_notices(
+            &[],
+            &[],
+            &report,
+            &History::default(),
+            &fresh_habits(),
+            5,
+            &quiet_sys(),
+        );
+        assert_eq!(valves(&notices), vec!["V-01"]);
+        let v1 = &notices[0];
+        assert_eq!(v1.level, Level::Critical);
+        assert!(v1
+            .obs
+            .iter()
+            .any(|o| o.contains("projected exhaustion in 5m 00s")));
+    }
+
+    #[test]
+    fn idle_browser_surfaces_reclaimable_reserve() {
+        let apps = vec![app("firefox", "Firefox", 2_000_000, 0.2)];
+        let intents = intents_of(&apps);
+        let mut report = report_with_used_pct(60.0);
+        report.memory.score = 60; // warm enough to look for reclaim
+        let notices = plan_notices(
+            &apps,
+            &intents,
+            &report,
+            &History::default(),
+            &fresh_habits(),
+            5,
+            &quiet_sys(),
+        );
+        assert_eq!(valves(&notices), vec!["V-03"]);
+        let v3 = &notices[0];
+        assert_eq!(v3.level, Level::Advisory);
+        assert_eq!(v3.title, "RECLAIMABLE RESERVE: FIREFOX");
+        assert_eq!(v3.suggest.as_deref(), Some("pv suspend firefox"));
+    }
+
+    #[test]
+    fn busy_browser_is_not_reclaimable() {
+        let apps = vec![app("firefox", "Firefox", 2_000_000, 35.0)];
+        let intents = intents_of(&apps);
+        let mut report = report_with_used_pct(60.0);
+        report.memory.score = 60;
+        let notices = plan_notices(
+            &apps,
+            &intents,
+            &report,
+            &History::default(),
+            &fresh_habits(),
+            5,
+            &quiet_sys(),
+        );
+        assert!(notices.iter().all(|n| n.valve != "V-03"));
+    }
+
+    #[test]
+    fn low_battery_with_migratable_build_suggests_migration() {
+        let apps = vec![app("cargo", "Cargo", 500_000, 85.0)];
+        let intents = intents_of(&apps);
+        let mut report = report_with_used_pct(30.0);
+        report.battery_info = Some(Battery {
+            capacity: 12,
+            discharging: true,
+        });
+        let notices = plan_notices(
+            &apps,
+            &intents,
+            &report,
+            &History::default(),
+            &fresh_habits(),
+            5,
+            &quiet_sys(),
+        );
+        assert_eq!(valves(&notices), vec!["V-07"]);
+        let v7 = &notices[0];
+        assert_eq!(v7.level, Level::Warning); // 12%: serious, not yet critical
+        assert_eq!(v7.gauge, Some(("BAT".to_string(), 88)));
+        assert!(v7
+            .obs
+            .iter()
+            .any(|o| o.contains("migratable workloads: Cargo")));
+        assert_eq!(v7.suggest.as_deref(), Some("pv migrate cargo"));
+    }
+
+    #[test]
+    fn critical_battery_without_migratable_work_escalates() {
+        let apps = vec![app("firefox", "Firefox", 900_000, 5.0)];
+        let intents = intents_of(&apps);
+        let mut report = report_with_used_pct(30.0);
+        report.battery_info = Some(Battery {
+            capacity: 6,
+            discharging: true,
+        });
+        let notices = plan_notices(
+            &apps,
+            &intents,
+            &report,
+            &History::default(),
+            &fresh_habits(),
+            5,
+            &quiet_sys(),
+        );
+        assert_eq!(valves(&notices), vec!["V-07"]);
+        let v7 = &notices[0];
+        assert_eq!(v7.level, Level::Critical); // <= 8% is critical
+        assert!(v7
+            .obs
+            .iter()
+            .any(|o| o.contains("no migratable workloads running")));
+        assert!(v7.suggest.is_none());
+    }
+
+    #[test]
+    fn charging_battery_stays_quiet() {
+        let mut report = report_with_used_pct(30.0);
+        report.battery_info = Some(Battery {
+            capacity: 10,
+            discharging: false,
+        });
+        let notices = plan_notices(
+            &[],
+            &[],
+            &report,
+            &History::default(),
+            &fresh_habits(),
+            5,
+            &quiet_sys(),
+        );
+        assert!(notices.is_empty());
+    }
+
+    #[test]
+    fn demand_spike_against_habit_baseline_fires_v02() {
+        let mut habits = fresh_habits();
+        for _ in 0..20 {
+            habits.observe_at(9, 30.0, 40.0, 0.2, &[]);
+        }
+        let apps = vec![app("ffmpeg", "Ffmpeg", 300_000, 92.0)];
+        let intents = intents_of(&apps);
+        let report = report_with_used_pct(30.0);
+        // load 2.6 on 4 cores = 65% vs a 30% learned baseline
+        let sys = SysSample {
+            ncpu: 4,
+            load1: 2.6,
+            hour: 9,
+            ..quiet_sys()
+        };
+        let notices = plan_notices(
+            &apps,
+            &intents,
+            &report,
+            &History::default(),
+            &habits,
+            5,
+            &sys,
+        );
+        assert_eq!(valves(&notices), vec!["V-02"]);
+        let v2 = &notices[0];
+        assert_eq!(v2.level, Level::Advisory);
+        assert!(v2.obs[0].contains("load 65% — your usual here is 30%"));
+        assert!(v2.obs.iter().any(|o| o.contains("primary source: Ffmpeg")));
+
+        // same hour at the learned baseline: no spike
+        let calm = SysSample {
+            ncpu: 4,
+            load1: 1.0,
+            hour: 9,
+            ..quiet_sys()
+        };
+        let notices = plan_notices(
+            &apps,
+            &intents,
+            &report,
+            &History::default(),
+            &habits,
+            5,
+            &calm,
+        );
+        assert!(notices.iter().all(|n| n.valve != "V-02"));
+    }
+
+    #[test]
+    fn next_hour_demand_front_forecast_fires_v06() {
+        let mut habits = fresh_habits();
+        for _ in 0..20 {
+            habits.observe_at(10, 50.0, 80.0, 0.2, &["build".to_string()]);
+        }
+        let report = report_with_used_pct(40.0);
+        let notices = plan_notices(
+            &[],
+            &[],
+            &report,
+            &History::default(),
+            &habits,
+            5,
+            &quiet_sys(), // hour 9 -> forecast looks at slot 10
+        );
+        assert_eq!(valves(&notices), vec!["V-06"]);
+        let v6 = &notices[0];
+        assert_eq!(v6.level, Level::Advisory);
+        assert_eq!(v6.title, "DEMAND FRONT INCOMING");
+        assert!(v6.obs[0].contains("your 10:00 block usually runs ~80% RAM (now 40%)"));
+        assert!(v6.obs.iter().any(|o| o.contains("usual suspects: build")));
+    }
+
+    #[test]
+    fn erratic_load_pattern_fires_v05() {
+        let report = report_with_used_pct(30.0);
+        let mut hist = History::default();
+        for i in 0..30 {
+            let load = if i % 2 == 0 { 0.2 } else { 3.0 };
+            hist.push(&report, load);
+        }
+        let (mean, cv) = hist.load_stats();
+        assert!(mean > 1.0 && cv > 0.55);
+        let notices = plan_notices(&[], &[], &report, &hist, &fresh_habits(), 5, &quiet_sys());
+        assert_eq!(valves(&notices), vec!["V-05"]);
+        assert_eq!(notices[0].title, "ERRATIC DEMAND PATTERN");
+    }
+
+    // ---------- history windows ----------
+
+    #[test]
+    fn history_window_trims_to_capacity() {
+        let mut h = History::default();
+        let r = report_with_used_pct(50.0);
+        for _ in 0..WINDOW + 25 {
+            h.push(&r, 1.0);
+        }
+        assert_eq!(h.len(), WINDOW);
+        assert_eq!(h.swap_used_kb.len(), WINDOW);
+        assert_eq!(h.load1.len(), WINDOW);
+    }
+
+    #[test]
+    fn mem_slope_measures_growth_rate() {
+        let mut h = History::default();
+        // available shrinks 10_000 kB per 5s tick -> used grows 2_000 kB/s
+        for i in 0..10u64 {
+            h.push(&base_report(TOTAL_KB, 8_000_000 - i * 10_000), 1.0);
+        }
+        assert!((h.mem_slope_kb_s(5) - 2_000.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn mem_slope_guards_degenerate_windows() {
+        let mut h = History::default();
+        assert!(h.mem_slope_kb_s(5).abs() < 1e-9); // empty
+        h.push(&report_with_used_pct(50.0), 1.0);
+        assert!(h.mem_slope_kb_s(5).abs() < 1e-9); // single sample
+        h.push(&report_with_used_pct(60.0), 1.0);
+        assert!(h.mem_slope_kb_s(0).abs() < 1e-9); // zero interval
+    }
+
+    #[test]
+    fn swap_growth_tracks_first_to_last() {
+        let mut h = History::default();
+        assert_eq!(h.swap_growth_kb(), 0);
+        for i in 0..4u64 {
+            let mut r = report_with_used_pct(50.0);
+            r.mem.swap_total_kb = 8_000_000;
+            r.mem.swap_free_kb = 2_000_000 - i * 25_000;
+            h.push(&r, 1.0);
+        }
+        assert_eq!(h.swap_growth_kb(), 75_000);
+    }
+
+    #[test]
+    fn load_stats_reports_mean_and_coefficient_of_variation() {
+        let mut h = History::default();
+        let (mean, cv) = h.load_stats();
+        assert!(mean.abs() < 1e-9 && cv.abs() < 1e-9); // empty
+
+        let r = report_with_used_pct(50.0);
+        h.push(&r, 1.0);
+        h.push(&r, 3.0);
+        let (mean, cv) = h.load_stats();
+        assert!((mean - 2.0).abs() < 1e-9);
+        assert!((cv - 0.5).abs() < 1e-9);
+
+        // flat load has zero variance even with a full window
+        let mut flat = History::default();
+        for _ in 0..5 {
+            flat.push(&r, 2.0);
+        }
+        let (mean, cv) = flat.load_stats();
+        assert!((mean - 2.0).abs() < 1e-9);
+        assert!(cv.abs() < 1e-9);
+    }
+
+    // ---------- habit learning ----------
+
+    #[test]
+    fn observe_seeds_emas_from_first_sample() {
+        let mut h = fresh_habits();
+        h.observe_at(9, 40.0, 60.0, 0.3, &["build".to_string()]);
+        let s = h.slot(9);
+        assert_eq!(s.samples, 1);
+        assert!((s.cpu_ema - 40.0).abs() < 1e-9);
+        assert!((s.mem_ema - 60.0).abs() < 1e-9);
+        assert!((s.var_ema - 0.3).abs() < 1e-9);
+        assert_eq!(s.top, vec![("build".to_string(), 1)]);
+        // every other slot stays untouched
+        assert_eq!(h.slot(10).samples, 0);
+        assert_eq!(h.total_samples(), 1);
+    }
+
+    #[test]
+    fn observe_learns_fast_early_then_slows() {
+        let mut h = fresh_habits();
+        h.observe_at(9, 50.0, 0.0, 1.0, &[]);
+        // samples < 50 -> alpha 0.2
+        h.observe_at(9, 100.0, 0.0, 0.0, &[]);
+        assert!((h.slot(9).cpu_ema - 60.0).abs() < 1e-9); // 50*0.8 + 100*0.2
+        assert!((h.slot(9).var_ema - 0.8).abs() < 1e-9); // 1.0*0.8 + 0.0*0.2
+
+        // drive to exactly 50 samples with a steady signal
+        let mut steady = fresh_habits();
+        for _ in 0..50 {
+            steady.observe_at(9, 10.0, 10.0, 0.1, &[]);
+        }
+        assert_eq!(steady.slot(9).samples, 50);
+        // samples >= 50 -> alpha 0.05: 10*0.95 + 110*0.05 = 15.0
+        steady.observe_at(9, 110.0, 10.0, 0.1, &[]);
+        assert!((steady.slot(9).cpu_ema - 15.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn observe_tracks_top_categories_capped_at_three() {
+        let mut h = fresh_habits();
+        for _ in 0..3 {
+            h.observe_at(9, 0.0, 0.0, 0.0, &["build".to_string()]);
+        }
+        for _ in 0..2 {
+            h.observe_at(9, 0.0, 0.0, 0.0, &["browser".to_string()]);
+        }
+        h.observe_at(9, 0.0, 0.0, 0.0, &["shell".to_string()]);
+        h.observe_at(9, 0.0, 0.0, 0.0, &["encode".to_string()]);
+        // one observe can count several categories at once
+        h.observe_at(
+            9,
+            0.0,
+            0.0,
+            0.0,
+            &["build".to_string(), "shell".to_string()],
+        );
+
+        let top = &h.slot(9).top;
+        assert_eq!(top.len(), 3);
+        assert_eq!(top[0], ("build".to_string(), 4));
+        assert_eq!(top[1], ("browser".to_string(), 2));
+        assert_eq!(top[2], ("shell".to_string(), 2));
+    }
+
+    #[test]
+    fn slots_learn_independently_per_hour() {
+        let mut h = fresh_habits();
+        h.observe_at(9, 80.0, 0.0, 0.0, &[]);
+        h.observe_at(21, 10.0, 0.0, 0.0, &[]);
+        assert!((h.slot(9).cpu_ema - 80.0).abs() < 1e-9);
+        assert!((h.slot(21).cpu_ema - 10.0).abs() < 1e-9);
+        assert_eq!(h.slot(10).samples, 0);
+        assert_eq!(h.total_samples(), 2);
+
+        // hours wrap like the clock: 33 == 09
+        h.observe_at(33, 40.0, 0.0, 0.0, &[]);
+        assert_eq!(h.slot(9).samples, 2);
+        assert_eq!(h.total_samples(), 3);
+    }
+
+    #[test]
+    fn habits_toml_roundtrip_preserves_slots() {
+        let mut h = fresh_habits();
+        h.observe_at(9, 42.0, 55.0, 0.3, &["build".to_string()]);
+        h.observe_at(
+            9,
+            44.0,
+            57.0,
+            0.1,
+            &["build".to_string(), "browser".to_string()],
+        );
+        h.observe_at(17, 5.0, 20.0, 0.05, &[]);
+
+        let s = toml::to_string_pretty(&h).expect("serialize");
+        let mut back: Habits = toml::from_str(&s).expect("deserialize");
+        back.slots.resize_with(24, HabitSlot::default); // mirror Habits::load
+
+        assert_eq!(back.slot(9).samples, 2);
+        assert!((back.slot(9).cpu_ema - h.slot(9).cpu_ema).abs() < 1e-9);
+        assert!((back.slot(9).var_ema - h.slot(9).var_ema).abs() < 1e-9);
+        assert_eq!(back.slot(9).top, h.slot(9).top);
+        assert_eq!(back.slot(17).samples, 1);
+        assert_eq!(back.total_samples(), h.total_samples());
+    }
 }
