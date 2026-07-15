@@ -486,6 +486,9 @@ cba = 0.45*acc + 0.25*stability + 0.15*freshness + 0.15*cost (ref $0.50/day)",
     let _ = writeln!(s, "mean cost ratio B/A: {:.1}x — mean stability delta (A-B): +{:.2}",
         ratio_sum / n, stab_delta_sum / n);
 
+    // ---- dynamic scaling handover ----------------------------------------------
+    scaling_section(&mut s, md);
+
     // ---- verdict + baseline ---------------------------------------------------
     h1(&mut s, "Verdict", md);
     if verdict_ok {
@@ -522,6 +525,8 @@ cba = 0.45*acc + 0.25*stability + 0.15*freshness + 0.15*cost (ref $0.50/day)",
     let _ = writeln!(s);
     let _ = writeln!(s, "  architecture : cached-nonstream (event + 120s heartbeat), atomic swap");
     let _ = writeln!(s, "  escalation   : move up one row when req tier exceeds the row's model");
+    let _ = writeln!(s, "  handover     : dynamic ladder 8b <-> 20b <-> 120b over the day; pays on");
+    let _ = writeln!(s, "                 octo+ devices — quad and below stay static (see above)");
     let _ = writeln!(s, "  pv live note : pv's own narration panel is a single-core-class task —");
     let _ = writeln!(s, "                 llama-3.1-8b-instant stays the right default there; the");
     let _ = writeln!(s, "                 rows above govern *agentic workflow supervision*.");
@@ -611,7 +616,16 @@ fn day_sim(w: &Workload, dev: usize, policy: Policy) -> DaySim {
     let (req1, ci1, co1, _) = demand(w, 1.0);
     let statik = cheapest_passing(req1, ci1, co1).unwrap();
 
-    let mut cur: &Model = statik;
+    // dynamic policies establish on the tick-0 pick (device boots at current
+    // demand, not at peak); only static pays for the peak-sized model from t0
+    let mut cur: &Model = match policy {
+        Policy::Static => statik,
+        _ => {
+            let (req0, ci0, co0, _) = demand(w, activity(dev, 0));
+            let b = cheapest_passing(req0, ci0, co0).unwrap();
+            if b.tier < floor.tier { floor } else { b }
+        }
+    };
     let (mut cost, mut handovers, mut violations) = (0.0, 0, 0);
     let mut dwell = 0usize;
 
@@ -645,9 +659,7 @@ fn day_sim(w: &Workload, dev: usize, policy: Policy) -> DaySim {
             }
         };
         if next.id != cur.id {
-            if tick > 0 {
-                handovers += 1;
-            }
+            handovers += 1;
             cur = next;
         }
         if accuracy_at(cur, req) < need {
@@ -775,8 +787,10 @@ fn scaling_section(s: &mut String, md: bool) {
 7. pre-arm      pv habits knows the per-hour profile — when the next\n\
              \x20   hour historically runs >=2x current demand, warm the\n\
              \x20   bigger rung one tick early\n\
-8. where it pays octo+ devices (peak req tier >= 3.5). quad and below\n\
-             \x20   already bottom out on the cheap rung — stay static", md);
+8. where it pays octo+ devices (peak req tier >= 3.5); octo gains most —\n\
+             \x20   on 12-core the peak hours dominate spend, so savings are\n\
+             \x20   real but smaller. quad and below already bottom out on\n\
+             \x20   the cheap rung — stay static", md);
     let _ = writeln!(s);
 }
 
@@ -801,6 +815,43 @@ fn check() -> Result<(), String> {
     let t5 = cheapest_pass(&WORKLOADS[4], Arch::CachedNonStream).unwrap().model.tier;
     if t5 <= t1 {
         return Err("no tier escalation between single and 12-core".into());
+    }
+    // dynamic handover: never worse than static, never flaps more than naive,
+    // never breaches the accuracy floor
+    for (i, w) in WORKLOADS.iter().enumerate() {
+        let st = day_sim(w, i, Policy::Static);
+        let na = day_sim(w, i, Policy::Naive);
+        let hy = day_sim(w, i, Policy::Hysteresis);
+        if hy.cost > st.cost {
+            return Err(format!("{}: hysteresis costs more than static", w.name));
+        }
+        if hy.violations > 0 || na.violations > 0 {
+            return Err(format!("{}: accuracy floor breached", w.name));
+        }
+        if hy.handovers > na.handovers {
+            return Err(format!("{}: hysteresis flaps more than naive", w.name));
+        }
+    }
+    // and it must actually pay where the strategy claims: octo and 12-core
+    // each save something, and their combined saving is meaningful. (12-core
+    // saves less than octo — its spend concentrates in the peak hours where
+    // the big rung is genuinely required.)
+    let (mut st_big, mut hy_big) = (0.0, 0.0);
+    for i in [3usize, 4] {
+        let st = day_sim(&WORKLOADS[i], i, Policy::Static);
+        let hy = day_sim(&WORKLOADS[i], i, Policy::Hysteresis);
+        if hy.cost >= st.cost {
+            return Err(format!("{}: handover saves nothing", WORKLOADS[i].name));
+        }
+        st_big += st.cost;
+        hy_big += hy.cost;
+    }
+    if hy_big > st_big * 0.80 {
+        return Err(format!(
+            "octo+12-core: combined handover saving under 20% ({}/{})",
+            money(hy_big),
+            money(st_big)
+        ));
     }
     Ok(())
 }
