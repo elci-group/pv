@@ -62,6 +62,13 @@ pub fn dashboard(t: &Theme) -> i32 {
         );
     }
     println!("{}", t.section("WORKLOADS"));
+    println!(
+        "  {}  {}  {}  {}  LIFECYCLE",
+        t.table_header(&t.cell("APP", 18)),
+        t.table_header(&t.cell("INTENT", 28)),
+        t.table_header(&t.cell("STATE", 12)),
+        t.table_header(&t.cell("RSS", 10)),
+    );
     print_app_table(t, &st.apps, &st.intents, 12);
 
     let recs = recommend::recommend(&st.apps, &st.intents, &st.report);
@@ -139,11 +146,30 @@ fn print_app_table(t: &Theme, apps: &[App], intents: &[(String, Intent)], limit:
             t.dim("system")
         };
         println!(
-            "  {:<18} {:<28} {:<12} {:<10} {}",
-            t.bold(&app.display),
-            t.dim(&int.task),
-            styled_status,
-            fmt_kb(app.rss_kb),
+            "  {}  {}  {}  {}  {}",
+            t.bold(&t.cell(&app.display, 18)),
+            t.dim(&t.cell(&int.task, 28)),
+            // Pad before styling so escape codes never change column width.
+            if is_susp || (int.never_suspend && int.interactive) || app.cpu_pct < 1.0 {
+                let plain = if is_susp {
+                    "suspended"
+                } else if int.never_suspend && int.interactive {
+                    "interactive"
+                } else {
+                    "idle"
+                };
+                let padded = t.cell(plain, 12);
+                if is_susp {
+                    t.magenta(&padded)
+                } else if int.never_suspend && int.interactive {
+                    t.cyan(&padded)
+                } else {
+                    t.dim(&padded)
+                }
+            } else {
+                t.cell(&format!("{:.0}% cpu", app.cpu_pct), 12)
+            },
+            t.number(&fmt_kb(app.rss_kb), 10),
             safe,
         );
         shown += 1;
@@ -163,11 +189,12 @@ pub fn ps(t: &Theme) -> i32 {
     );
     println!("{}", t.section("ACTIVE WORKLOADS"));
     println!(
-        "{}",
-        t.bold(&format!(
-            "{:<18} {:<28} {:<12} {:<10} {:<8} {}",
-            "APP", "INTENT", "STATE", "RSS", "PIDS", "LIFECYCLE"
-        ))
+        "{}  {}  {}  {}  {}  LIFECYCLE",
+        t.table_header(&t.cell("APP", 18)),
+        t.table_header(&t.cell("INTENT", 28)),
+        t.table_header(&t.cell("STATE", 12)),
+        t.table_header(&t.cell("RSS", 10)),
+        t.table_header(&t.cell("PIDS", 8)),
     );
     for app in st
         .apps
@@ -193,12 +220,18 @@ pub fn ps(t: &Theme) -> i32 {
             t.dim("idle")
         };
         println!(
-            "{:<18} {:<28} {:<12} {:<10} {:<8} {}",
-            app.display,
-            int.task,
-            state,
-            fmt_kb(app.rss_kb),
-            app.pids.len(),
+            "{}  {}  {}  {}  {}  {}",
+            t.cell(&app.display, 18),
+            t.cell(&int.task, 28),
+            if app.state == 'T' {
+                t.magenta(&t.cell("stopped", 12))
+            } else if app.cpu_pct >= 1.0 {
+                t.cell(&format!("{:.0}% cpu", app.cpu_pct), 12)
+            } else {
+                t.dim(&t.cell("idle", 12))
+            },
+            t.number(&fmt_kb(app.rss_kb), 10),
+            t.number(&app.pids.len().to_string(), 8),
             t.dim(&lifecycle.join(" · ")),
         );
     }
@@ -408,6 +441,12 @@ pub fn sessions(t: &Theme) -> i32 {
         t.title("PV / SESSIONS", "detached work that survives terminal loss")
     );
     println!("{}", t.section("CONTINUITY"));
+    println!(
+        "  {}  {}  {}  PID",
+        t.table_header(&t.cell("STATUS", 10)),
+        t.table_header(&t.cell("ID", 10)),
+        t.table_header(&t.cell("COMMAND", 24)),
+    );
     for s in sessions {
         let alive = session::is_alive(&s);
         let status = if alive {
@@ -417,10 +456,14 @@ pub fn sessions(t: &Theme) -> i32 {
         };
         let last = session::tail(&s, 1).pop().unwrap_or_default();
         println!(
-            "  {} {:<10} {:<24} {}",
-            status,
-            s.id,
-            s.cmd.join(" "),
+            "  {}  {}  {}  {}",
+            if alive {
+                t.green(&t.cell("running", 10))
+            } else {
+                t.dim(&t.cell("finished", 10))
+            },
+            t.cell(&s.id, 10),
+            t.cell(&s.cmd.join(" "), 24),
             t.dim(&format!("pid {}", s.pid))
         );
         if !last.is_empty() {
@@ -537,16 +580,22 @@ pub fn suspended(t: &Theme) -> i32 {
         println!("{}", t.dim("Nothing suspended."));
         return 0;
     }
+    println!(
+        "  {}  {}  {}  AGE",
+        t.table_header(&t.cell("APP", 18)),
+        t.table_header(&t.cell("INTENT", 28)),
+        t.table_header(&t.cell("RSS", 10)),
+    );
     for s in all {
         let age = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs().saturating_sub(s.suspended_at))
             .unwrap_or(0);
         println!(
-            "  {:<18} {:<28} {:<10} {}",
-            t.bold(&s.display),
-            t.dim(&s.task),
-            fmt_kb(s.rss_kb),
+            "  {}  {}  {}  {}",
+            t.bold(&t.cell(&s.display, 18)),
+            t.dim(&t.cell(&s.task, 28)),
+            t.number(&fmt_kb(s.rss_kb), 10),
             t.dim(&format!("frozen {}", fmt_eta(age)))
         );
     }
@@ -681,6 +730,12 @@ pub fn hosts(t: &Theme, init: bool) -> i32 {
         );
         return 0;
     }
+    println!(
+        "  {}  {}  {}  DETAILS",
+        t.table_header(&t.cell("NAME", 14)),
+        t.table_header(&t.cell("ADDRESS", 24)),
+        t.table_header(&t.cell("STATUS", 9)),
+    );
     for (name, h) in hosts {
         let up = migrate::online(&h.addr);
         let status = if up {
@@ -694,10 +749,14 @@ pub fn hosts(t: &Theme, init: bool) -> i32 {
             String::new()
         };
         println!(
-            "  {:<14} {:<24} {:<9} {}",
-            t.bold(&name),
-            h.addr,
-            status,
+            "  {}  {}  {}  {}",
+            t.bold(&t.cell(&name, 14)),
+            t.cell(&h.addr, 24),
+            if up {
+                t.green(&t.cell("online", 9))
+            } else {
+                t.dim(&t.cell("offline", 9))
+            },
             t.dim(&if probe.is_empty() { h.note } else { probe })
         );
     }

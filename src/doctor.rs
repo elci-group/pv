@@ -92,6 +92,12 @@ fn config_exists(rel: &str) -> bool {
 
 pub fn run(t: &Theme) -> i32 {
     println!("{}", t.section("pv doctor — environment preflight"));
+    println!(
+        " {}  {}  {}  PURPOSE",
+        t.table_header(&t.cell("TOOL", 12)),
+        t.table_header(&t.cell("STATUS", 10)),
+        t.table_header(&t.cell("TIER", 4)),
+    );
     let mut missing_required = 0;
     let mut missing_optional = 0;
     for p in PROBES {
@@ -110,24 +116,35 @@ pub fn run(t: &Theme) -> i32 {
         };
         let need = if p.required { "core" } else { "opt " };
         println!(
-            " {:<12} {}  {}  {}",
-            p.tool,
-            mark,
-            t.dim(need),
+            " {}  {}  {}  {}",
+            t.cell(p.tool, 12),
+            if ok {
+                t.green(&t.cell("ready", 10))
+            } else if p.required {
+                t.red(&t.cell("required", 10))
+            } else {
+                t.yellow(&t.cell("missing", 10))
+            },
+            t.dim(&t.cell(need, 4)),
             t.dim(p.used_for)
         );
     }
 
     println!();
     println!("{}", t.section("configuration"));
+    println!(
+        " {}  {}  PURPOSE",
+        t.table_header(&t.cell("ITEM", 12)),
+        t.table_header(&t.cell("STATUS", 12)),
+    );
     let groq = crate::groq::api_key().is_some();
     println!(
-        " {:<12} {}  {}",
-        "groq key",
+        " {}  {}  {}",
+        t.cell("groq key", 12),
         if groq {
-            t.green("✓")
+            t.green(&t.cell("ready", 12))
         } else {
-            t.yellow("· not set")
+            t.yellow(&t.cell("not set", 12))
         },
         t.dim("inference ($GROQ_API_KEY or ~/.config/pv/groq_api_key)")
     );
@@ -137,12 +154,12 @@ pub fn run(t: &Theme) -> i32 {
     ] {
         let ok = config_exists(file);
         println!(
-            " {:<12} {}  {}",
-            file,
+            " {}  {}  {}",
+            t.cell(file, 12),
             if ok {
-                t.green("✓")
+                t.green(&t.cell("ready", 12))
             } else {
-                t.dim("· not created")
+                t.dim(&t.cell("not created", 12))
             },
             t.dim(what)
         );

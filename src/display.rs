@@ -79,6 +79,35 @@ impl Theme {
             self.green(&bar)
         }
     }
+
+    /// Fit a cell before applying ANSI styling. Formatting a styled string with
+    /// `{:width$}` counts escape bytes, which makes coloured table rows drift.
+    pub fn cell(&self, value: &str, width: usize) -> String {
+        fit(value, width, false)
+    }
+
+    /// As [`Self::cell`], but right-aligned for numeric values.
+    pub fn number(&self, value: &str, width: usize) -> String {
+        fit(value, width, true)
+    }
+
+    /// Consistent muted table heading for every static command view.
+    pub fn table_header(&self, value: &str) -> String {
+        self.bold(&self.cyan(value))
+    }
+}
+
+fn fit(value: &str, width: usize, right: bool) -> String {
+    let mut clipped: String = value.chars().take(width).collect();
+    if value.chars().count() > width && width > 0 {
+        clipped.pop();
+        clipped.push('…');
+    }
+    if right {
+        format!("{clipped:>width$}")
+    } else {
+        format!("{clipped:<width$}")
+    }
 }
 
 pub fn bar(score: u8, width: usize) -> String {
