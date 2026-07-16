@@ -1,6 +1,6 @@
 [package]
 name = "pv"
-version = "0.8.11"
+version = "0.8.12"
 edition = "2021"
 description = "Pressure Valve — intelligent process lifecycle management"
 license = "MIT"
@@ -9,6 +9,7 @@ license = "MIT"
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
+log = "0.4"
 
 [profile.release]
 opt-level = 2
