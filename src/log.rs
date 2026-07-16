@@ -77,7 +77,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn level_from_env_parses_variants() {
+    fn parse_level_accepts_standard_names() {
         for (s, want) in [
             ("off", log::LevelFilter::Off),
             ("error", log::LevelFilter::Error),
@@ -86,22 +86,13 @@ mod tests {
             ("debug", log::LevelFilter::Debug),
             ("trace", log::LevelFilter::Trace),
         ] {
-            std::env::set_var("PV_LOG_TEST_LEVEL", s);
-            assert_eq!(
-                level_from_env("warn"),
-                want,
-                "PV_LOG={s} should parse"
-            );
-            std::env::remove_var("PV_LOG_TEST_LEVEL");
+            assert_eq!(parse_level(s), Some(want), "{s} should parse");
         }
     }
 
     #[test]
-    fn level_defaults_to_argument_when_env_missing_or_bad() {
-        std::env::remove_var("PV_LOG_TEST_LEVEL");
-        assert_eq!(level_from_env("info"), log::LevelFilter::Info);
-        std::env::set_var("PV_LOG_TEST_LEVEL", "nonsense");
-        assert_eq!(level_from_env("debug"), log::LevelFilter::Debug);
-        std::env::remove_var("PV_LOG_TEST_LEVEL");
+    fn parse_level_rejects_garbage() {
+        assert_eq!(parse_level("nonsense"), None);
+        assert_eq!(parse_level(""), None);
     }
 }

@@ -1,5 +1,6 @@
 //! pv — Pressure Valve: intelligent process lifecycle management.
 
+mod cgroup;
 mod commands;
 mod daemon;
 mod display;
@@ -8,6 +9,7 @@ mod groq;
 mod intent;
 mod label;
 mod live;
+mod log;
 mod migrate;
 mod net;
 mod notify;
@@ -216,6 +218,13 @@ fn main() {
         signal(13 /*SIGPIPE*/, 0 /*SIG_DFL*/)
     };
     let cli = Cli::parse();
+    // daemon is chatty about its observations; everything else stays quiet
+    let log_default = if matches!(cli.cmd, Some(Cmd::Daemon { .. })) {
+        "info"
+    } else {
+        "warn"
+    };
+    crate::log::init(log_default);
     let theme = Theme::new();
     suspend::gc();
     session::gc();
