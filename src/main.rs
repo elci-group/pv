@@ -47,7 +47,14 @@ const HELP_BANNER: &str = r#"
 "#;
 
 #[derive(Parser)]
-#[command(name = "pv", version, about = "Pressure Valve — intelligent process lifecycle management", long_about = HELP_BANNER)]
+#[command(
+    name = "pv",
+    version,
+    about = "Pressure Valve — intelligent process lifecycle management",
+    long_about = HELP_BANNER,
+    subcommand_help_heading = "COMMANDS",
+    help_template = "{before-help}{about-with-newline}\n{usage-heading} {usage}\n\n{all-args}{after-help}"
+)]
 struct Cli {
     #[command(subcommand)]
     cmd: Option<Cmd>,
@@ -63,7 +70,13 @@ enum Cmd {
     Explain,
     /// Classify a command without running it
     Intent {
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true, required = true)]
+        #[arg(
+            trailing_var_arg = true,
+            allow_hyphen_values = true,
+            required = true,
+            value_name = "COMMAND",
+            help = "Command and arguments to classify"
+        )]
         cmd: Vec<String>,
     },
     /// Run a command as a detached pv session (survives disconnect)
@@ -71,24 +84,40 @@ enum Cmd {
         /// Run on a configured remote host instead
         #[arg(long)]
         remote: Option<String>,
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true, required = true)]
+        #[arg(
+            trailing_var_arg = true,
+            allow_hyphen_values = true,
+            required = true,
+            value_name = "COMMAND",
+            help = "Command and arguments to run in the session"
+        )]
         cmd: Vec<String>,
     },
     /// List pv sessions
     Sessions,
     /// Follow a session's output
-    Attach { id: String },
+    Attach {
+        #[arg(help = "Session ID or unique prefix")]
+        id: String,
+    },
     /// Gracefully suspend an app (by name or pid)
     Suspend {
+        #[arg(help = "Application name or process ID")]
         target: String,
         /// Override never-suspend protections
         #[arg(long)]
         force: bool,
     },
     /// Resume a suspended app
-    Resume { target: String },
+    Resume {
+        #[arg(help = "Suspended application name")]
+        target: String,
+    },
     /// Terminate a suspended app (thaws, then SIGTERM)
-    Kill { target: String },
+    Kill {
+        #[arg(help = "Suspended application name")]
+        target: String,
+    },
     /// List suspended apps
     Suspended,
     /// Evaluate pressure policies (--apply to act, --init to write defaults)
@@ -105,8 +134,10 @@ enum Cmd {
     },
     /// Migrate restartable work to a remote host
     Migrate {
+        #[arg(help = "Running application or pv session to migrate")]
         target: String,
         #[arg(long)]
+        /// Destination host name (defaults to the first online host)
         to: Option<String>,
     },
     /// Run the observation daemon: learns habits, vents valve notifications
