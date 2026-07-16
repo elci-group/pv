@@ -107,13 +107,6 @@ pub fn run(t: &Theme) -> i32 {
         } else if !ok {
             missing_optional += 1;
         }
-        let mark = if ok {
-            t.green("✓")
-        } else if p.required {
-            t.red("✗ REQUIRED")
-        } else {
-            t.yellow("· missing")
-        };
         let need = if p.required { "core" } else { "opt " };
         println!(
             " {}  {}  {}  {}",

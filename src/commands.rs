@@ -120,19 +120,6 @@ fn print_app_table(t: &Theme, apps: &[App], intents: &[(String, Intent)], limit:
             continue;
         };
         let is_susp = suspended.iter().any(|s| s.key == app.key);
-        let (status, styled_status): (String, String) = if is_susp {
-            ("suspended".into(), t.magenta("suspended"))
-        } else if int.never_suspend && int.interactive {
-            ("interactive".into(), t.cyan("interactive"))
-        } else if app.cpu_pct < 1.0 {
-            ("idle".into(), t.dim("idle"))
-        } else {
-            (
-                format!("{:.0}% cpu", app.cpu_pct),
-                format!("{:.0}% cpu", app.cpu_pct),
-            )
-        };
-        let _ = status;
         let safe = if int.never_suspend {
             t.red("never suspend")
         } else if int.can_suspend {
@@ -212,13 +199,6 @@ pub fn ps(t: &Theme) -> i32 {
         .into_iter()
         .flatten()
         .collect();
-        let state = if app.state == 'T' {
-            t.magenta("stopped")
-        } else if app.cpu_pct >= 1.0 {
-            format!("{:.0}% cpu", app.cpu_pct)
-        } else {
-            t.dim("idle")
-        };
         println!(
             "{}  {}  {}  {}  {}  {}",
             t.cell(&app.display, 18),
@@ -449,11 +429,6 @@ pub fn sessions(t: &Theme) -> i32 {
     );
     for s in sessions {
         let alive = session::is_alive(&s);
-        let status = if alive {
-            t.green("running")
-        } else {
-            t.dim("finished")
-        };
         let last = session::tail(&s, 1).pop().unwrap_or_default();
         println!(
             "  {}  {}  {}  {}",
@@ -738,11 +713,6 @@ pub fn hosts(t: &Theme, init: bool) -> i32 {
     );
     for (name, h) in hosts {
         let up = migrate::online(&h.addr);
-        let status = if up {
-            t.green("online")
-        } else {
-            t.dim("offline")
-        };
         let probe = if up {
             migrate::probe(&h.addr).unwrap_or_default()
         } else {
