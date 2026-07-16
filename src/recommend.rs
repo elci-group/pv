@@ -27,6 +27,7 @@ pub struct Recommendation {
     pub pids: Vec<u32>,
 }
 
+#[cfg(test)]
 pub fn recommend(
     apps: &[App],
     intents: &[(String, Intent)],
@@ -232,6 +233,22 @@ mod tests {
         assert_eq!(r.benefit_kb, 500_000);
         assert_eq!(r.confidence, 80);
         assert!(r.display.starts_with("Suspend firefox (+"), "{}", r.display);
+    }
+
+    #[test]
+    fn active_grace_excludes_a_browser_from_suspend_recommendations() {
+        let apps = vec![app("chrome", 900_000, 0.0)];
+        let labels = Labels {
+            global: None,
+            app: vec![crate::label::AppLabel {
+                key: "chrome".into(),
+                display: "Chrome".into(),
+                prompt: "Watching a tutorial".into(),
+                expires_at: u64::MAX,
+            }],
+        };
+        let recs = recommend_with_labels(&apps, &intents_for(&apps), &report(60, 0, None), &labels);
+        assert!(recs.is_empty());
     }
 
     #[test]

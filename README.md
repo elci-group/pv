@@ -126,6 +126,22 @@ Task: Build Rust workspace
   Remote friendly:       yes
 ```
 
+### `pv label <prompt...>` — working context
+
+Capture what matters in plain language. A broad note becomes the visible
+global context; tutorial, video, and YouTube activity is reflected against
+active applications. pv selects the highest-memory browser and gives it a
+15-minute grace period, so an idle tutorial tab is not recommended for
+suspension while you are using it.
+
+```sh
+pv label "I am developing a Python based game today"
+pv label "I am watching tutorials on YouTube"
+```
+
+Labels are local (`~/.config/pv/labels.toml`), never control a process by
+themselves, and only suppress recommendations while an app grace is active.
+
 ### `pv run -- <cmd...>` — continuity
 
 Runs the command detached (setsid, output to a log). SSH can drop, the

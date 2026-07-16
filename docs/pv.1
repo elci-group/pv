@@ -55,6 +55,12 @@ Plain-language explanation of the current system state.
 Classify a command without running it: interruptibility, suspend safety,
 migratability, GPU needs.
 .TP
+.BI "pv label " prompt...
+Record natural-language working context. A general prompt is saved as global
+context. Tutorial, video, and YouTube prompts are matched to the largest
+active browser and grant it a 15-minute recommendation grace, preventing an
+idle tab from being recommended for suspension while it is being used.
+.TP
 .BI "pv run -- " cmd...
 Run a command as a detached session (setsid, logged). Survives terminal and
 SSH disconnects. \fB--remote\fR \fIhost\fR rsyncs the working directory to
