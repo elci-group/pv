@@ -6,6 +6,7 @@ mod display;
 mod doctor;
 mod groq;
 mod intent;
+mod label;
 mod live;
 mod migrate;
 mod net;
@@ -78,6 +79,17 @@ enum Cmd {
             help = "Command and arguments to classify"
         )]
         cmd: Vec<String>,
+    },
+    /// Record natural-language context or give an active app a temporary grace period
+    Label {
+        #[arg(
+            trailing_var_arg = true,
+            allow_hyphen_values = true,
+            required = true,
+            value_name = "PROMPT",
+            help = "Describe what you are doing, in plain language"
+        )]
+        prompt: Vec<String>,
     },
     /// Run a command as a detached pv session (survives disconnect)
     Run {
@@ -215,6 +227,7 @@ fn main() {
         Some(Cmd::Pressure) => c::pressure(&theme),
         Some(Cmd::Explain) => c::explain(&theme),
         Some(Cmd::Intent { cmd }) => c::intent(&theme, &cmd),
+        Some(Cmd::Label { prompt }) => c::label(&theme, &prompt.join(" ")),
         Some(Cmd::Run { remote, cmd }) => c::run(&theme, &cmd, remote),
         Some(Cmd::Sessions) => c::sessions(&theme),
         Some(Cmd::Attach { id }) => c::attach(&theme, &id),

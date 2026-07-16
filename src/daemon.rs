@@ -255,7 +255,7 @@ fn oneshot_notices_at(
 ) -> Vec<Notice> {
     let mut out = Vec::new();
     let used = mem_used_pct(report);
-    let recs = recommend::recommend(apps, intents, report);
+    let recs = recommend::recommend_with_labels(apps, intents, report, &crate::label::load());
 
     // V-01 memory pressure, current reading
     if used >= 85.0 || report.oom_eta_secs.map(|e| e < 600).unwrap_or(false) {

@@ -1,6 +1,7 @@
 //! Recommendations: what would relieve pressure right now?
 
 use crate::intent::{self, Category, Intent};
+use crate::label::Labels;
 use crate::pressure::{fmt_eta, fmt_kb, PressureReport};
 use crate::procfs::App;
 
@@ -31,6 +32,15 @@ pub fn recommend(
     intents: &[(String, Intent)],
     report: &PressureReport,
 ) -> Vec<Recommendation> {
+    recommend_with_labels(apps, intents, report, &Labels::default())
+}
+
+pub fn recommend_with_labels(
+    apps: &[App],
+    intents: &[(String, Intent)],
+    report: &PressureReport,
+    labels: &Labels,
+) -> Vec<Recommendation> {
     let mut out = Vec::new();
     let intent_of = |key: &str| intents.iter().find(|(k, _)| k == key).map(|(_, i)| i);
 
@@ -43,9 +53,14 @@ pub fn recommend(
             continue;
         };
         let idle = app.cpu_pct < 1.0 && !app.has_audio;
+        let graced = crate::label::grace_remaining(labels, &app.key).is_some();
 
         // idle browser under memory pressure -> suspend
-        if matches!(intent.category, Category::Browser) && mem_warm && idle && app.rss_kb > 150_000
+        if !graced
+            && matches!(intent.category, Category::Browser)
+            && mem_warm
+            && idle
+            && app.rss_kb > 150_000
         {
             let conf = intent::suspend_confidence(app, intent, 600);
             out.push(Recommendation {
@@ -115,9 +130,10 @@ pub fn recommend(
     if let Some(eta) = report.oom_eta_secs {
         if mem_hot && !out.iter().any(|r| r.action == Action::Suspend) {
             if let Some(big) = apps.iter().find(|a| {
-                intent_of(&a.key)
-                    .map(|i| i.can_suspend && !i.never_suspend)
-                    .unwrap_or(false)
+                crate::label::grace_remaining(labels, &a.key).is_none()
+                    && intent_of(&a.key)
+                        .map(|i| i.can_suspend && !i.never_suspend)
+                        .unwrap_or(false)
             }) {
                 out.insert(
                     0,

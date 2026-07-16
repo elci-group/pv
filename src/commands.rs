@@ -4,7 +4,7 @@ use crate::display::Theme;
 use crate::intent::{self, Category, Intent};
 use crate::pressure::{self, fmt_eta, fmt_kb, PressureReport};
 use crate::procfs::{self, App};
-use crate::{migrate, policy, recommend, session, suspend};
+use crate::{label, migrate, policy, recommend, session, suspend};
 
 const SAMPLE_MS: u64 = 200;
 
@@ -71,7 +71,22 @@ pub fn dashboard(t: &Theme) -> i32 {
     );
     print_app_table(t, &st.apps, &st.intents, 12);
 
-    let recs = recommend::recommend(&st.apps, &st.intents, &st.report);
+    let labels = label::load();
+    if let Some(global) = &labels.global {
+        println!("{}", t.section("YOUR CONTEXT"));
+        println!("  {}", t.dim(&global.prompt));
+    }
+    for app in &labels.app {
+        if let Some(left) = label::grace_remaining(&labels, &app.key) {
+            println!(
+                "  {} {} for {}",
+                t.dim("grace:"),
+                app.display,
+                label::format_duration(left)
+            );
+        }
+    }
+    let recs = recommend::recommend_with_labels(&st.apps, &st.intents, &st.report, &labels);
     if !recs.is_empty() {
         println!("{}", t.section("RECOMMENDED NEXT STEP"));
         for r in &recs {
@@ -315,7 +330,7 @@ pub fn explain(t: &Theme) -> i32 {
         lines.push(format!("Projected memory exhaustion in {}.", fmt_eta(eta)));
     }
 
-    let recs = recommend::recommend(&st.apps, &st.intents, r);
+    let recs = recommend::recommend_with_labels(&st.apps, &st.intents, r, &label::load());
     if let Some(first) = recs.first() {
         lines.push(format!("Recommendation: {}.", first.display));
         lines.push(format!("Confidence: {}%.", first.confidence));
@@ -358,6 +373,39 @@ pub fn intent(t: &Theme, cmd: &[String]) -> i32 {
         println!("  {}", t.dim(&i.detail));
     }
     0
+}
+
+// ---------- label ----------
+
+pub fn label(t: &Theme, prompt: &str) -> i32 {
+    if prompt.trim().is_empty() {
+        eprintln!("usage: pv label <what you are doing>");
+        return 2;
+    }
+    let st = gather();
+    match label::apply(prompt, &st.apps, &st.intents) {
+        Ok(decision) => match decision.scope {
+            label::Scope::Global => {
+                println!("{} global context saved", t.green("✓"));
+                println!("  {}", t.dim(&decision.rationale));
+                0
+            }
+            label::Scope::App { display, .. } => {
+                println!(
+                    "{} {} has a {} recommendation grace",
+                    t.green("✓"),
+                    display,
+                    label::format_duration(decision.grace_secs.unwrap_or(0))
+                );
+                println!("  {}", t.dim(&decision.rationale));
+                0
+            }
+        },
+        Err(e) => {
+            eprintln!("[pv] cannot save label: {e}");
+            1
+        }
+    }
 }
 
 // ---------- run / sessions / attach ----------
