@@ -371,7 +371,11 @@ fn kill_cgroup(path: &PathBuf, starts: &[PidStart]) -> Result<usize, String> {
     // Give processes a moment to exit before destroying the cgroup.
     thread::sleep(Duration::from_millis(200));
     if let Err(e) = freezer.destroy() {
-        log::warn!("cgroup destroy after kill failed: {e}");
+        log::warn!("cgroup destroy after SIGTERM failed: {e}, trying cgroup.kill");
+        if freezer.kill_all().is_ok() {
+            thread::sleep(Duration::from_millis(100));
+            let _ = freezer.destroy();
+        }
     }
     Ok(n)
 }

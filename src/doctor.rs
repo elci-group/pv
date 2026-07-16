@@ -124,6 +124,19 @@ pub fn run(t: &Theme) -> i32 {
     }
 
     println!();
+    println!("{}", t.section("kernel capabilities"));
+    println!(
+        " {}  {}  {}",
+        t.cell("cgroup v2", 12),
+        if crate::cgroup::available() {
+            t.green(&t.cell("ready", 12))
+        } else {
+            t.yellow(&t.cell("unavailable", 12))
+        },
+        t.dim("atomic process-tree freeze/thaw")
+    );
+
+    println!();
     println!("{}", t.section("configuration"));
     println!(
         " {}  {}  PURPOSE",

@@ -283,7 +283,29 @@ pub fn desktop(n: &Notice) {
     if let Some(s) = &n.suggest {
         body.push_str(&format!("\n\n› {s}"));
     }
-    let _ = std::process::Command::new("notify-send")
-        .args(["-u", urgency, &format!("PV :: {}", n.title), &body])
-        .spawn();
+    let title = format!("PV :: {}", n.title);
+    let title = sanitize_notify_arg(&title, 128);
+    let body = sanitize_notify_arg(&body, 1024);
+    match std::process::Command::new("notify-send")
+        .args(["-u", urgency, &title, &body])
+        .spawn()
+    {
+        Ok(_) => {}
+        Err(e) => log::warn!("notify-send failed: {e}"),
+    }
+}
+
+/// notify-send receives arguments directly, but the strings still travel over
+/// D-Bus. Strip control characters (especially NUL) and cap length so a huge
+/// suggestion cannot break the notification bus.
+fn sanitize_notify_arg(s: &str, max_len: usize) -> String {
+    let mut out: String = s
+        .chars()
+        .filter(|c| !c.is_control() || *c == '\n')
+        .take(max_len)
+        .collect();
+    if s.chars().count() > max_len {
+        out.push('…');
+    }
+    out
 }

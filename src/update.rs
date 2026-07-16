@@ -33,6 +33,31 @@ pub fn current_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
+/// Reject repo strings that would produce a malformed or suspicious URL.
+fn validate_repo(repo: &str) -> Result<(), String> {
+    if repo.is_empty() {
+        return Err("repo cannot be empty".into());
+    }
+    if repo.len() > 128 {
+        return Err("repo string is too long".into());
+    }
+    // owner/repo, with optional -_. in names
+    let parts: Vec<&str> = repo.split('/').collect();
+    if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() {
+        return Err(format!("repo must be owner/name, got '{repo}'"));
+    }
+    for part in &parts {
+        for c in part.chars() {
+            if !(c.is_alphanumeric() || c == '-' || c == '_' || c == '.') {
+                return Err(format!(
+                    "repo part '{part}' contains unsafe character '{c}'"
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn parse_ver(s: &str) -> (u32, u32, u32) {
     let mut it = s.trim().trim_start_matches('v').split('.');
     let n = |p: Option<&str>| p.and_then(|x| x.trim().parse().ok()).unwrap_or(0);
@@ -257,6 +282,10 @@ fn verify(binary: &Path, sums_body: &str) -> Result<(), String> {
 }
 
 pub fn run(t: &Theme, o: &Options) -> i32 {
+    if let Err(e) = validate_repo(&o.repo) {
+        eprintln!("[pv] {e}");
+        return 1;
+    }
     let cur = current_version();
     println!("{} {cur}", t.dim("current:"));
 
@@ -413,6 +442,17 @@ fn path_hint(t: &Theme, dest: &Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn validates_repo_format() {
+        validate_repo("elci-group/pv").unwrap();
+        validate_repo("owner-name/repo_name").unwrap();
+        assert!(validate_repo("").is_err());
+        assert!(validate_repo("pv").is_err());
+        assert!(validate_repo("a/b/c").is_err());
+        assert!(validate_repo("a/b;c").is_err());
+        assert!(validate_repo("a b/c").is_err());
+    }
 
     #[test]
     fn parses_versions() {

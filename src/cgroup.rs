@@ -111,7 +111,10 @@ impl Freezer {
     /// Move every process currently in this cgroup back to the parent cgroup,
     /// then delete the transient cgroup. Callers should thaw first if they
     /// want the processes to run; this only handles cgroup bookkeeping.
-    pub fn destroy(self) -> Result<(), Error> {
+    ///
+    /// This borrows rather than consumes so callers can retry cleanup (e.g.
+    /// after a `cgroup.kill` fallback) without reconstructing the handle.
+    pub fn destroy(&self) -> Result<(), Error> {
         let parent = match parent_of(&self.path) {
             Some(p) => p,
             None => return Err(Error::Destroy(self.path.clone(), io_error("no parent"))),

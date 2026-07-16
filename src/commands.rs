@@ -1,5 +1,7 @@
 //! Command implementations — one per CLI verb.
 
+use std::path::PathBuf;
+
 use crate::display::Theme;
 use crate::intent::{self, Category, Intent};
 use crate::pressure::{self, fmt_eta, fmt_kb, PressureReport};
@@ -702,15 +704,27 @@ pub fn policy(t: &Theme, apply: bool, init: bool) -> i32 {
                     }
                 }
                 "throttle" => {
+                    let mut ok = 0;
+                    let mut fail = 0;
                     for &pid in &h.pids {
-                        let _ = std::process::Command::new("renice")
-                            .args(["+15", "-p", &pid.to_string()])
-                            .status();
-                        let _ = std::process::Command::new("ionice")
-                            .args(["-c", "3", "-p", &pid.to_string()])
-                            .status();
+                        if !PathBuf::from(format!("/proc/{pid}")).exists() {
+                            log::debug!("throttle: pid {pid} vanished, skipping");
+                            continue;
+                        }
+                        match throttle_pid(pid) {
+                            Ok(()) => ok += 1,
+                            Err(e) => {
+                                fail += 1;
+                                log::warn!("throttle pid {pid} failed: {e}");
+                            }
+                        }
                     }
-                    println!("    {}", t.green("reniced +15, ionice idle"));
+                    let msg = if fail == 0 {
+                        format!("reniced +15, ionice idle ({ok} pids)")
+                    } else {
+                        format!("throttle applied to {ok} pids, {fail} failed")
+                    };
+                    println!("    {}", if fail == 0 { t.green(&msg) } else { t.yellow(&msg) });
                 }
                 _ => {}
             }
@@ -893,6 +907,33 @@ fn truncate(s: &str, n: usize) -> String {
             s.chars().take(n.saturating_sub(1)).collect::<String>()
         )
     }
+}
+
+/// Apply renice +15 and ionice class 3 (idle) to a single pid, returning a
+/// descriptive error if either tool is missing or refuses. The two commands
+/// are invoked with argument lists so no shell is involved.
+fn throttle_pid(pid: u32) -> Result<(), String> {
+    let nice = std::process::Command::new("renice")
+        .args(["+15", "-p", &pid.to_string()])
+        .output()
+        .map_err(|e| format!("renice spawn: {e}"))?;
+    if !nice.status.success() {
+        return Err(format!(
+            "renice: {}",
+            String::from_utf8_lossy(&nice.stderr).trim()
+        ));
+    }
+    let ionice = std::process::Command::new("ionice")
+        .args(["-c", "3", "-p", &pid.to_string()])
+        .output()
+        .map_err(|e| format!("ionice spawn: {e}"))?;
+    if !ionice.status.success() {
+        return Err(format!(
+            "ionice: {}",
+            String::from_utf8_lossy(&ionice.stderr).trim()
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
