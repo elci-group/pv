@@ -157,7 +157,7 @@ pub fn grace_remaining(labels: &Labels, key: &str) -> Option<u64> {
 }
 
 pub fn format_duration(secs: u64) -> String {
-    format!("{}m", (secs + 59) / 60)
+    format!("{}m", secs.div_ceil(60))
 }
 
 #[cfg(test)]
