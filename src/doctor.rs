@@ -125,15 +125,24 @@ pub fn run(t: &Theme) -> i32 {
 
     println!();
     println!("{}", t.section("kernel capabilities"));
+    let (cgroup_status, cgroup_note) = if crate::cgroup::probe() {
+        (t.green(&t.cell("ready", 12)), "atomic process-tree freeze/thaw active")
+    } else if crate::cgroup::available() {
+        (
+            t.yellow(&t.cell("present", 12)),
+            "freezer controller visible but not delegated to this session",
+        )
+    } else {
+        (
+            t.yellow(&t.cell("unavailable", 12)),
+            "kernel lacks cgroup v2 freezer; SIGSTOP fallback will be used",
+        )
+    };
     println!(
         " {}  {}  {}",
         t.cell("cgroup v2", 12),
-        if crate::cgroup::available() {
-            t.green(&t.cell("ready", 12))
-        } else {
-            t.yellow(&t.cell("unavailable", 12))
-        },
-        t.dim("atomic process-tree freeze/thaw")
+        cgroup_status,
+        t.dim(cgroup_note)
     );
 
     println!();

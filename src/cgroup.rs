@@ -200,11 +200,17 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// True when /sys/fs/cgroup looks like a usable cgroup v2 hierarchy with the
-/// freezer controller available somewhere above us.
+/// Cheap predicate: does this kernel expose a cgroup v2 freezer controller?
+/// This does not prove we can actually freeze a process; use [`probe`] for a
+/// functional check.
 pub fn available() -> bool {
     let events = Path::new(CGROUP_ROOT).join("cgroup.events");
     if !events.exists() {
+        return false;
+    }
+    // The freezer controller must be available in the root hierarchy before we
+    // can hope to enable it in our subtree.
+    if !has_freezer_controller() {
         return false;
     }
     // The presence of our own cgroup file proves we are actually in the v2
@@ -215,6 +221,30 @@ pub fn available() -> bool {
     }
     // Cheap delegation probe: can we read our own cgroup path?
     own_cgroup_path().is_ok()
+}
+
+/// Functional check: create a tiny transient cgroup, freeze it (empty freeze
+/// is instant), thaw it, and destroy it. This is the only way to be sure the
+/// current user actually has freezer delegation.
+pub fn probe() -> bool {
+    if !available() {
+        return false;
+    }
+    let Ok(freezer) = Freezer::new("probe") else {
+        return false;
+    };
+    let ok = freezer.freeze(Duration::from_millis(200)).is_ok()
+        && freezer.thaw(Duration::from_millis(200)).is_ok();
+    let _ = freezer.destroy();
+    ok
+}
+
+fn has_freezer_controller() -> bool {
+    let controllers = Path::new(CGROUP_ROOT).join("cgroup.controllers");
+    fs::read_to_string(controllers)
+        .unwrap_or_default()
+        .split_whitespace()
+        .any(|c| c == "freezer")
 }
 
 /// Read the v2 cgroup path of the current process from /proc/self/cgroup.
