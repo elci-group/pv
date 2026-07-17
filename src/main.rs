@@ -18,6 +18,7 @@ mod pressure;
 mod procfs;
 mod recommend;
 mod session;
+mod storage;
 mod suspend;
 mod update;
 
@@ -69,6 +70,8 @@ enum Cmd {
     Ps,
     /// Detailed pressure breakdown (cpu, ram, io, battery, thermals)
     Pressure,
+    /// Filesystem capacity report (usage per mount)
+    Storage,
     /// Explain the current system state in plain language
     Explain,
     /// Classify a command without running it
@@ -234,6 +237,7 @@ fn main() {
         None => c::dashboard(&theme),
         Some(Cmd::Ps) => c::ps(&theme),
         Some(Cmd::Pressure) => c::pressure(&theme),
+        Some(Cmd::Storage) => c::storage(&theme),
         Some(Cmd::Explain) => c::explain(&theme),
         Some(Cmd::Intent { cmd }) => c::intent(&theme, &cmd),
         Some(Cmd::Label { prompt }) => c::label(&theme, &prompt.join(" ")),

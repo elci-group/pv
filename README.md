@@ -84,8 +84,8 @@ man pv
 
 ### `pv` — dashboard
 
-Pressure bars (CPU / RAM / IO / battery / thermals), the contextual process
-view, and concrete recommendations.
+Pressure bars (CPU / RAM / IO / battery / thermals), the fullest filesystem
+as a DISK line, the contextual process view, and concrete recommendations.
 
 ![pv dashboard, intent recognition, and explain](docs/dashboard.gif)
 
@@ -113,6 +113,24 @@ Every app with its inferred intent and lifecycle capabilities
 Detailed pressure breakdown with memory burn rate, and a plain-language
 explanation of the system state including projected OOM ETA when memory is
 genuinely draining.
+
+### `pv storage` — filesystem capacity
+
+Every real filesystem with a usage bar, fullest first. Pseudo filesystems,
+loop devices (snap), and container overlays are hidden; anything at 90% or
+more gets a warning. The fullest mount also appears as a DISK line in the
+dashboard and `pv pressure`.
+
+```
+$ pv storage
+MOUNT                DEVICE                SIZE      AVAIL    USE%
+/                    /dev/nvme0n1p3       459.5 GB   12.4 GB  █████████░  97%
+/recovery            /dev/nvme0n1p2         4.0 GB    1.1 GB  ███████░░░  73%
+/boot/efi            /dev/nvme0n1p1        1020 MB    723 MB  ██░░░░░░░░  29%
+/dev/shm             tmpfs (RAM)            3.7 GB    3.3 GB  █░░░░░░░░░  10%
+fullest: / at 97% — 12.4 GB free
+⚠ / is 97% full — 12.4 GB free
+```
 
 ### `pv intent <cmd...>` — intent recognition
 

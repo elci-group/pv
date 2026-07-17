@@ -6,7 +6,7 @@ use crate::display::Theme;
 use crate::intent::{self, Category, Intent};
 use crate::pressure::{self, fmt_eta, fmt_kb, PressureReport};
 use crate::procfs::{self, App};
-use crate::{label, migrate, policy, recommend, session, suspend};
+use crate::{label, migrate, policy, recommend, session, storage, suspend};
 
 const SAMPLE_MS: u64 = 200;
 
@@ -56,6 +56,7 @@ pub fn dashboard(t: &Theme) -> i32 {
             t.dim(&rp.detail)
         );
     }
+    print_disk_line(t, 9);
     if let Some(eta) = st.report.oom_eta_secs {
         println!(
             "  {} projected memory exhaustion in {}",
@@ -260,6 +261,7 @@ pub fn pressure(t: &Theme) -> i32 {
             t.dim(&rp.detail)
         );
     }
+    print_disk_line(t, 10);
     println!("{}", t.section("MEMORY TREND"));
     println!(
         "  {:<10} {}  {}",
@@ -287,6 +289,88 @@ pub fn pressure(t: &Theme) -> i32 {
         "unknown"
     };
     println!("  {:<10} {}", "Context", t.dim(attention));
+    0
+}
+
+// ---------- storage ----------
+
+/// The fullest filesystem as one pressure-row line, shared by the dashboard
+/// and `pv pressure`. `width` matches each view's resource-name column.
+fn print_disk_line(t: &Theme, width: usize) {
+    let fs = storage::filesystems();
+    let Some(f) = storage::fullest(&fs) else {
+        return;
+    };
+    let detail = if fs.len() == 1 {
+        format!("{} free on {}", fmt_kb(f.avail_kb), f.mount)
+    } else {
+        format!(
+            "{} free on {} (fullest of {} filesystems)",
+            fmt_kb(f.avail_kb),
+            f.mount,
+            fs.len()
+        )
+    };
+    println!(
+        "  {:<width$} {} {:>3}%  {}",
+        "DISK",
+        t.score_colored(f.used_pct),
+        f.used_pct,
+        t.dim(&detail)
+    );
+}
+
+pub fn storage(t: &Theme) -> i32 {
+    let fs = storage::filesystems();
+    println!("{}", t.title("PV / STORAGE", "filesystem capacity report"));
+    if fs.is_empty() {
+        println!("{}", t.dim("  No mounted filesystems found."));
+        return 0;
+    }
+    println!("{}", t.section("FILESYSTEMS"));
+    println!(
+        "  {}  {}  {}  {}  USE%",
+        t.table_header(&t.cell("MOUNT", 22)),
+        t.table_header(&t.cell("DEVICE", 22)),
+        t.table_header(&t.number("SIZE", 9)),
+        t.table_header(&t.number("AVAIL", 9)),
+    );
+    for f in &fs {
+        let device = if f.fstype == "tmpfs" || f.fstype == "devtmpfs" {
+            format!("{} (RAM)", f.device)
+        } else {
+            f.device.clone()
+        };
+        println!(
+            "  {}  {}  {}  {}  {} {:>3}%",
+            t.bold(&t.cell(&f.mount, 22)),
+            t.dim(&t.cell(&device, 22)),
+            t.number(&fmt_kb(f.total_kb), 9),
+            t.number(&fmt_kb(f.avail_kb), 9),
+            t.score_colored(f.used_pct),
+            f.used_pct,
+        );
+    }
+    if let Some(f) = storage::fullest(&fs) {
+        println!(
+            "  {}",
+            t.dim(&format!(
+                "fullest: {} at {}% — {} free",
+                f.mount,
+                f.used_pct,
+                fmt_kb(f.avail_kb)
+            ))
+        );
+    }
+    for f in fs.iter().filter(|f| f.used_pct >= 90) {
+        println!(
+            "  {} {} is {}% full — {} free",
+            t.red("⚠"),
+            f.mount,
+            f.used_pct,
+            fmt_kb(f.avail_kb)
+        );
+    }
     0
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "pv"
-version = "0.8.15"
+version = "0.8.16"
 edition = "2021"
 description = "Pressure Valve — intelligent process lifecycle management"
 license = "MIT"

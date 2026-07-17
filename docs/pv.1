@@ -37,8 +37,9 @@ notifications.
 .SH COMMANDS
 .TP
 .B pv
-Dashboard: pressure bars (CPU/RAM/IO/battery/thermals), the contextual
-process view, and concrete recommendations.
+Dashboard: pressure bars (CPU/RAM/IO/battery/thermals), the fullest
+filesystem as a DISK line, the contextual process view, and concrete
+recommendations.
 .TP
 .B pv ps
 Contextual process list: each app with its inferred intent and lifecycle
@@ -47,6 +48,11 @@ capabilities (suspend, interrupt, migrate).
 .B pv pressure
 Detailed pressure breakdown, including memory burn rate and projected OOM
 ETA when memory is genuinely draining.
+.TP
+.B pv storage
+Filesystem capacity report: usage bar, size, and free space per real mount,
+fullest first. Pseudo filesystems, loop devices (snap), and container
+overlays are hidden. Warns when any filesystem is 90% full.
 .TP
 .B pv explain
 Plain-language explanation of the current system state.
