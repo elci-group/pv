@@ -53,6 +53,11 @@ ETA when memory is genuinely draining.
 Filesystem capacity report: usage bar, size, and free space per real mount,
 fullest first. Pseudo filesystems, loop devices (snap), and container
 overlays are hidden. Warns when any filesystem is 90% full.
+When the fullest filesystem reaches 85%, pv spawns \fBdeckhand inspect\fR
+detached in the background and caches the result for six hours; the next
+run shows a RECLAIMABLE section with the total and heaviest projects, and
+the dashboard DISK line carries the reclaimable total. pv never blocks on
+the scan; without deckhand on PATH the section stays hidden.
 .TP
 .B pv explain
 Plain-language explanation of the current system state.
@@ -168,6 +173,11 @@ Policy throttle actions (\fBpv policy --apply\fR).
 .TP
 .B stty
 \fBpv live\fR terminal mode.
+.TP
+.B deckhand
+Reclaim analysis in \fBpv storage\fR: under storage pressure pv runs
+\fBdeckhand inspect\fR in the background and reports what build artifacts
+can be reclaimed.
 .SH FILES
 .TP
 .I ~/.config/pv/policies.toml
@@ -180,7 +190,8 @@ Remote hosts for migration (\fBpv hosts --init\fR for a template).
 Groq API key (alternative to the environment variable).
 .TP
 .I ~/.local/share/pv/
-State: sessions/, suspended.toml, habits.toml.
+State: sessions/, suspended.toml, habits.toml, deckhand_scan.json (reclaim
+analysis cache, refreshed at most every six hours under storage pressure).
 .SH ENVIRONMENT
 .TP
 .B GROQ_API_KEY

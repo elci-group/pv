@@ -68,6 +68,11 @@ const PROBES: &[Probe] = &[
         required: false,
         used_for: "pv live terminal size",
     },
+    Probe {
+        tool: "deckhand",
+        required: false,
+        used_for: "pv storage reclaim analysis",
+    },
 ];
 
 /// True when `tool` resolves to an executable regular file on $PATH.

@@ -35,6 +35,11 @@ path = "src/session.rs"
 required = true
 
 [[file]]
+path = "src/storage.rs"
+required = true
+forbid_regex = ["TODO", "FIXME", "unimplemented!"]
+
+[[file]]
 path = "src/policy.rs"
 required = true
 
@@ -140,6 +145,12 @@ name = "smoke: pressure"
 cmd = ["./target/release/pv", "pressure"]
 expect_exit = 0
 stdout_contains = ["System pressure"]
+
+[[command]]
+name = "smoke: storage"
+cmd = ["./target/release/pv", "storage"]
+expect_exit = 0
+stdout_contains = ["FILESYSTEMS"]
 
 [[command]]
 name = "smoke: explain"

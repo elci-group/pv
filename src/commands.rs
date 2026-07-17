@@ -301,7 +301,7 @@ fn print_disk_line(t: &Theme, width: usize) {
     let Some(f) = storage::fullest(&fs) else {
         return;
     };
-    let detail = if fs.len() == 1 {
+    let mut detail = if fs.len() == 1 {
         format!("{} free on {}", fmt_kb(f.avail_kb), f.mount)
     } else {
         format!(
@@ -311,6 +311,11 @@ fn print_disk_line(t: &Theme, width: usize) {
             fs.len()
         )
     };
+    if storage::under_pressure(f.used_pct) {
+        if let storage::ReclaimState::Fresh(r, _) = storage::reclaim(f.used_pct, &f.mount) {
+            detail.push_str(&format!(" · {} reclaimable", r.total_human));
+        }
+    }
     println!(
         "  {:<width$} {} {:>3}%  {}",
         "DISK",
@@ -371,7 +376,53 @@ pub fn storage(t: &Theme) -> i32 {
             fmt_kb(f.avail_kb)
         );
     }
+    if let Some(f) = storage::fullest(&fs) {
+        if storage::under_pressure(f.used_pct) {
+            print_reclaim(t, storage::reclaim(f.used_pct, &f.mount));
+        }
+    }
     0
+}
+
+/// deckhand-powered reclaim view for a filesystem under pressure. The scan
+/// runs detached in the background; only the cached result is rendered.
+fn print_reclaim(t: &Theme, state: storage::ReclaimState) {
+    match state {
+        storage::ReclaimState::Dark => {}
+        storage::ReclaimState::Scanning => {
+            println!("{}", t.section("RECLAIMABLE"));
+            println!(
+                "  {}",
+                t.dim("deckhand scan running… report ready on the next run")
+            );
+        }
+        storage::ReclaimState::Fresh(r, age) => {
+            println!("{}", t.section("RECLAIMABLE"));
+            println!(
+                "  {} across {} projects with build artifacts  {}",
+                t.bold(&r.total_human),
+                r.candidates,
+                t.dim(&format!("(deckhand scan, {})", scan_age(age)))
+            );
+            for (name, human) in &r.projects {
+                println!("    {}  {}", t.cell(name, 24), t.dim(human));
+            }
+            println!(
+                "  {}",
+                t.dim("reclaim: deckhand clean  ·  details: deckhand inspect")
+            );
+        }
+    }
+}
+
+fn scan_age(age: u64) -> String {
+    if age < 60 {
+        format!("{age}s old")
+    } else if age < 3600 {
+        format!("{} min old", age / 60)
+    } else {
+        format!("{:.1} h old", age as f64 / 3600.0)
+    }
 }
 
 // ---------- explain ----------

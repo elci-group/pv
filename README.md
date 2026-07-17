@@ -55,8 +55,9 @@ to standard Unix tools instead of linking libraries:
 - **Optional:** `ssh` + `rsync` (`pv migrate`, `pv run --remote`),
   `git` + `cargo` (`pv update --source`), `notify-send` (desktop valve
   notifications), `getconf` (precise CPU tick rate), `renice` + `ionice`
-  (policy throttle actions), `stty` (`pv live` terminal mode). A missing
-  optional tool darkens only the matching feature.
+  (policy throttle actions), `stty` (`pv live` terminal mode), `deckhand`
+  (`pv storage` reclaim analysis). A missing optional tool darkens only the
+  matching feature.
 
 Run `pv doctor` to preflight your environment — it probes each tool and
 the optional config files, and reports exactly which features degrade when
@@ -130,6 +131,22 @@ MOUNT                DEVICE                SIZE      AVAIL    USE%
 /dev/shm             tmpfs (RAM)            3.7 GB    3.3 GB  █░░░░░░░░░  10%
 fullest: / at 97% — 12.4 GB free
 ⚠ / is 97% full — 12.4 GB free
+```
+
+Under real pressure (fullest filesystem at 85% or more) pv automatically
+asks [deckhand](https://github.com/elci-group/deckhand) what can be
+reclaimed. The scan runs detached in the background — pv never waits on it —
+and the result is cached in `~/.local/share/pv/deckhand_scan.json` for six
+hours. The next `pv storage` shows a RECLAIMABLE section with the total and
+the heaviest projects, and the DISK line carries the reclaimable total.
+Without deckhand on PATH the feature stays dark.
+
+```
+── RECLAIMABLE ─────────────────────────────────────────
+  27.40 GB across 2 projects with build artifacts  (deckhand scan, 4 min old)
+    kaptaind                  18.16 GB
+    grow                      9.25 GB
+  reclaim: deckhand clean  ·  details: deckhand inspect
 ```
 
 ### `pv intent <cmd...>` — intent recognition
