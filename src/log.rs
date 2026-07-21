@@ -51,11 +51,7 @@ impl log::Log for PvLogger {
         let level = record.level();
         let target = record.target();
         let mut stderr = std::io::stderr();
-        let _ = writeln!(
-            stderr,
-            "[pv {ts} {level:<5} {target}] {}",
-            record.args()
-        );
+        let _ = writeln!(stderr, "[pv {ts} {level:<5} {target}] {}", record.args());
     }
 
     fn flush(&self) {}

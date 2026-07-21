@@ -67,9 +67,7 @@ pub fn validate_addr(addr: &str) -> Result<(), String> {
         return Err("host address is too long".into());
     }
     for c in addr.chars() {
-        if c.is_alphanumeric()
-            || "._-@:[]".contains(c)
-        {
+        if c.is_alphanumeric() || "._-@:[]".contains(c) {
             continue;
         }
         return Err(format!(
@@ -79,7 +77,9 @@ pub fn validate_addr(addr: &str) -> Result<(), String> {
     // Defensive: no whitespace or control characters should survive the loop,
     // but reject them explicitly for clarity.
     if addr.chars().any(|c| c.is_whitespace() || c.is_control()) {
-        return Err(format!("host address '{addr}' contains whitespace/control characters"));
+        return Err(format!(
+            "host address '{addr}' contains whitespace/control characters"
+        ));
     }
     Ok(())
 }
@@ -135,7 +135,9 @@ pub fn migrate_command(host: &Host, cmd: &[String], cwd: &str) -> Result<(), Str
     validate_addr(&host.addr)?;
     for tool in ["ssh", "rsync"] {
         if Command::new(tool).arg("--version").output().is_err() {
-            return Err(format!("`{tool}` not found — install it to enable migration"));
+            return Err(format!(
+                "`{tool}` not found — install it to enable migration"
+            ));
         }
     }
     if cmd.is_empty() {
@@ -179,7 +181,11 @@ pub fn migrate_command(host: &Host, cmd: &[String], cwd: &str) -> Result<(), Str
         return Err(format!("rsync failed ({st})"));
     }
 
-    log::info!("migrating to {}: resuming remotely: {}", host.addr, cmd.join(" "));
+    log::info!(
+        "migrating to {}: resuming remotely: {}",
+        host.addr,
+        cmd.join(" ")
+    );
     println!("[pv] resuming remotely: {}", cmd.join(" "));
 
     let remote_cd = shell_quote_keep_tilde(&remote_dir);
@@ -187,10 +193,7 @@ pub fn migrate_command(host: &Host, cmd: &[String], cwd: &str) -> Result<(), Str
     let script = format!("cd {remote_cd} && {remote_cmd}");
 
     let mut ssh = ssh_base(&host.addr)?;
-    let st = ssh
-        .arg(&script)
-        .status()
-        .map_err(|e| format!("ssh: {e}"))?;
+    let st = ssh.arg(&script).status().map_err(|e| format!("ssh: {e}"))?;
     if st.success() {
         log::info!("migration to {} finished OK", host.addr);
         println!("[pv] remote run finished OK — local copy untouched in {cwd}");

@@ -1,5 +1,6 @@
 //! pv — Pressure Valve: intelligent process lifecycle management.
 
+mod admit;
 mod cgroup;
 mod commands;
 mod daemon;
@@ -72,6 +73,17 @@ enum Cmd {
     Pressure,
     /// Filesystem capacity report (usage per mount)
     Storage,
+    /// Decide whether a latency-sensitive job has enough RAM and storage
+    Admit {
+        #[arg(long)]
+        ram_bytes: u64,
+        #[arg(long)]
+        storage_bytes: u64,
+        #[arg(long)]
+        path: std::path::PathBuf,
+        #[arg(long, default_value = "human")]
+        format: String,
+    },
     /// Explain the current system state in plain language
     Explain,
     /// Classify a command without running it
@@ -238,6 +250,24 @@ fn main() {
         Some(Cmd::Ps) => c::ps(&theme),
         Some(Cmd::Pressure) => c::pressure(&theme),
         Some(Cmd::Storage) => c::storage(&theme),
+        Some(Cmd::Admit {
+            ram_bytes,
+            storage_bytes,
+            path,
+            format,
+        }) => {
+            if format != "human" && format != "json" {
+                eprintln!("format must be human or json");
+                1
+            } else {
+                admit::run(admit::Request {
+                    ram_bytes,
+                    storage_bytes,
+                    path: &path,
+                    json: format == "json",
+                })
+            }
+        }
         Some(Cmd::Explain) => c::explain(&theme),
         Some(Cmd::Intent { cmd }) => c::intent(&theme, &cmd),
         Some(Cmd::Label { prompt }) => c::label(&theme, &prompt.join(" ")),

@@ -859,7 +859,14 @@ pub fn policy(t: &Theme, apply: bool, init: bool) -> i32 {
                     } else {
                         format!("throttle applied to {ok} pids, {fail} failed")
                     };
-                    println!("    {}", if fail == 0 { t.green(&msg) } else { t.yellow(&msg) });
+                    println!(
+                        "    {}",
+                        if fail == 0 {
+                            t.green(&msg)
+                        } else {
+                            t.yellow(&msg)
+                        }
+                    );
                 }
                 _ => {}
             }

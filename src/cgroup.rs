@@ -137,8 +137,7 @@ impl Freezer {
                 }
             }
         }
-        fs::remove_dir(&self.path)
-            .map_err(|e| Error::Destroy(self.path.clone(), e))
+        fs::remove_dir(&self.path).map_err(|e| Error::Destroy(self.path.clone(), e))
     }
 
     /// Poll `cgroup.events` until `frozen` matches `want` or `timeout` elapses.
@@ -249,8 +248,7 @@ fn has_freezer_controller() -> bool {
 
 /// Read the v2 cgroup path of the current process from /proc/self/cgroup.
 fn own_cgroup_path() -> Result<PathBuf, Error> {
-    let text = fs::read_to_string("/proc/self/cgroup")
-        .map_err(Error::OwnCgroup)?;
+    let text = fs::read_to_string("/proc/self/cgroup").map_err(Error::OwnCgroup)?;
     for line in text.lines() {
         // v2 unified hierarchy lines look like: 0::<path>
         if let Some(rest) = line.strip_prefix("0::") {

@@ -131,7 +131,10 @@ pub fn run(t: &Theme) -> i32 {
     println!();
     println!("{}", t.section("kernel capabilities"));
     let (cgroup_status, cgroup_note) = if crate::cgroup::probe() {
-        (t.green(&t.cell("ready", 12)), "atomic process-tree freeze/thaw active")
+        (
+            t.green(&t.cell("ready", 12)),
+            "atomic process-tree freeze/thaw active",
+        )
     } else if crate::cgroup::available() {
         (
             t.yellow(&t.cell("present", 12)),

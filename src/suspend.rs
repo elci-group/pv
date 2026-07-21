@@ -170,7 +170,10 @@ fn build_entry(
     }
 }
 
-fn persist_and_take(entry: SuspendedApp, rollback: impl FnOnce(&SuspendedApp)) -> Result<SuspendedApp, String> {
+fn persist_and_take(
+    entry: SuspendedApp,
+    rollback: impl FnOnce(&SuspendedApp),
+) -> Result<SuspendedApp, String> {
     let mut all = load_suspended();
     all.retain(|s| s.key != entry.key);
     all.push(entry.clone());
@@ -191,9 +194,12 @@ fn try_cgroup_suspend(
     rss_kb: u64,
     task: &str,
 ) -> Result<SuspendedApp, String> {
-    let freezer = crate::cgroup::Freezer::new(key)
-        .map_err(|e| format!("cgroup freezer unavailable: {e}"))?;
-    log::info!("{key}: using cgroup freezer at {}", freezer.path().display());
+    let freezer =
+        crate::cgroup::Freezer::new(key).map_err(|e| format!("cgroup freezer unavailable: {e}"))?;
+    log::info!(
+        "{key}: using cgroup freezer at {}",
+        freezer.path().display()
+    );
 
     let mut moved = Vec::new();
     let mut starts = Vec::new();
@@ -270,7 +276,10 @@ pub fn suspend(
     }
     let entry = build_entry(key, display, pids, rss_kb, task, starts, None);
     persist_and_take(entry, |e| {
-        log::warn!("{key}: recording suspension failed, thawing {n} pids", n = e.pids.len());
+        log::warn!(
+            "{key}: recording suspension failed, thawing {n} pids",
+            n = e.pids.len()
+        );
         thaw(&e.pids, &e.starts);
     })
 }
