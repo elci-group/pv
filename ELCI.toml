@@ -1,0 +1,35 @@
+# Staged by portfolio alignment 2026-10-20; NOT yet written to the repository.
+# Requires human review (§38): class, maturity, and relationships are proposals.
+schema = 1
+
+[project]
+name = "pv"
+class = "tool"
+maturity = "M2"
+status = "active"
+description = "Pressure Valve — intelligent process lifecycle management for Linux: treats processes as intents, predicts resource exhaustion, then suspends, resumes, detaches or migrates work."
+owner = "elci-group"
+criticality = "medium"
+
+[interfaces]
+cli = true
+library = false
+http = false
+event_producer = false   # TODO confirm (§10)
+event_consumer = false   # TODO confirm (§10)
+
+[portfolio]
+supersedes = []
+superseded_by = []
+related = []
+depends_on = ["jeenome"]
+consumed_by = []         # TODO populate (§23)
+
+[maintenance]
+review_interval_days = 60
+last_reviewed = "2026-10-20"
+
+# Central extension (ELCI-PH-001 §5 allows; satisfies §19/§31)
+[language]
+edition = "2021"
+version = "0.8.18"
